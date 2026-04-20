@@ -22,5 +22,6 @@ public:
 };
 
 std::unique_ptr<IDemuxer> CreateFFmpegDemuxer();
+std::unique_ptr<IDemuxer> CreateNetworkDemuxer();
 
 } // namespace avsdk
