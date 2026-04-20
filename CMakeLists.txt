@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Find FFmpeg
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale libswresample)
+pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale libswresample libavfilter)
 
 # Find libcurl
 find_package(CURL REQUIRED)

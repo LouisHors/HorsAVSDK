@@ -12,6 +12,8 @@ add_library(avsdk_core STATIC
     network/retry_policy.cpp
     bypass/data_bypass_manager.cpp
     bypass/screenshot_handler.cpp
+    bypass/video_recorder.cpp
+    bypass/filter_processor.cpp
 )
 
 target_include_directories(avsdk_core PUBLIC

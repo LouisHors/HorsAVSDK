@@ -54,3 +54,13 @@ add_test(NAME data_bypass_test COMMAND data_bypass_test)
 add_executable(screenshot_handler_test screenshot_handler_test.cpp)
 target_link_libraries(screenshot_handler_test PRIVATE avsdk_core GTest::gtest_main)
 add_test(NAME screenshot_handler_test COMMAND screenshot_handler_test)
+
+# Video recorder test
+add_executable(video_recorder_test video_recorder_test.cpp)
+target_link_libraries(video_recorder_test PRIVATE avsdk_core GTest::gtest_main)
+add_test(NAME video_recorder_test COMMAND video_recorder_test)
+
+# Filter processor test
+add_executable(filter_processor_test filter_processor_test.cpp)
+target_link_libraries(filter_processor_test PRIVATE avsdk_core GTest::gtest_main)
+add_test(NAME filter_processor_test COMMAND filter_processor_test)
