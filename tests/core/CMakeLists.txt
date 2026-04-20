@@ -29,3 +29,8 @@ add_test(NAME hls_parser_test COMMAND hls_parser_test)
 add_executable(network_demuxer_test network_demuxer_test.cpp)
 target_link_libraries(network_demuxer_test PRIVATE avsdk_core GTest::gtest_main)
 add_test(NAME network_demuxer_test COMMAND network_demuxer_test)
+
+# Retry policy test
+add_executable(retry_policy_test retry_policy_test.cpp)
+target_link_libraries(retry_policy_test PRIVATE avsdk_core GTest::gtest_main)
+add_test(NAME retry_policy_test COMMAND retry_policy_test)

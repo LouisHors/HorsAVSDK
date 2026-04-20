@@ -8,6 +8,7 @@ add_library(avsdk_core STATIC
     player/player_impl.cpp
     buffer/ring_buffer.cpp
     hls/hls_parser.cpp
+    network/retry_policy.cpp
 )
 
 target_include_directories(avsdk_core PUBLIC
