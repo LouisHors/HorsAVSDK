@@ -17,4 +17,22 @@ if(APPLE)
         ${FFMPEG_INCLUDE_DIRS}
     )
     add_test(NAME MetalRendererTest COMMAND metal_renderer_test)
+
+    # VideoToolbox decoder test for macOS
+    add_executable(videotoolbox_decoder_test videotoolbox_decoder_test.mm)
+    target_link_libraries(videotoolbox_decoder_test PRIVATE
+        avsdk_platform
+        avsdk_infrastructure
+        GTest::gtest
+        GTest::gtest_main
+        "-framework VideoToolbox"
+        "-framework CoreVideo"
+        "-framework CoreMedia"
+    )
+    target_include_directories(videotoolbox_decoder_test PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+        ${FFMPEG_INCLUDE_DIRS}
+    )
+    add_test(NAME VideoToolboxDecoderTest COMMAND videotoolbox_decoder_test)
 endif()

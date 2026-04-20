@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.14)
 
 if(APPLE)
-    # macOS platform library with Metal support
+    # macOS platform library with Metal and VideoToolbox support
     set(PLATFORM_SOURCES
         macos/metal_renderer.mm
+        macos/videotoolbox_decoder.mm
     )
 
     add_library(avsdk_platform STATIC ${PLATFORM_SOURCES})
@@ -19,6 +20,9 @@ if(APPLE)
         avsdk_infrastructure
         "-framework Metal"
         "-framework Cocoa"
+        "-framework VideoToolbox"
+        "-framework CoreVideo"
+        "-framework CoreMedia"
     )
 
     target_compile_options(avsdk_platform PRIVATE
