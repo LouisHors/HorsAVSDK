@@ -1,0 +1,2 @@
+add_executable(simple_player main.cpp)
+target_link_libraries(simple_player avsdk_core avsdk_platform avsdk_infrastructure)
