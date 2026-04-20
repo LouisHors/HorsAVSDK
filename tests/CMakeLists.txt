@@ -8,3 +8,6 @@ include_directories(${GTEST_INCLUDE_DIRS})
 
 # Infrastructure tests
 add_subdirectory(infrastructure)
+
+# Core tests
+add_subdirectory(core)
