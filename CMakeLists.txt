@@ -9,6 +9,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFMPEG REQUIRED libavcodec libavformat libavutil libswscale libswresample)
 
+# Find libcurl
+find_package(CURL REQUIRED)
+
 # Include directories
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
@@ -22,6 +25,7 @@ link_directories(${FFMPEG_LIBRARY_DIRS})
 add_subdirectory(src/core)
 add_subdirectory(src/platform)
 add_subdirectory(src/infrastructure)
+add_subdirectory(src/network)
 
 # Tests
 enable_testing()

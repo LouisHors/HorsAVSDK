@@ -17,6 +17,8 @@ enum class ErrorCode : int32_t {
     CodecOpenFailed = 201,
     CodecDecodeFailed = 202,
 
+    NetworkConnectFailed = 300,
+
     FileNotFound = 400,
     FileOpenFailed = 401,
     FileInvalidFormat = 404,

@@ -15,6 +15,9 @@ add_subdirectory(core)
 # Platform tests
 add_subdirectory(platform)
 
+# Network tests
+add_subdirectory(network)
+
 # Integration tests
 add_executable(player_integration_test integration/player_integration_test.cpp)
 target_link_libraries(player_integration_test avsdk_core avsdk_platform avsdk_infrastructure ${FFMPEG_LIBRARIES} GTest::gtest GTest::gtest_main pthread)
