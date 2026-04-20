@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.14)
 add_library(avsdk_core STATIC
     demuxer/ffmpeg_demuxer.cpp
     decoder/ffmpeg_decoder.cpp
+    player/player_impl.cpp
 )
 
 target_include_directories(avsdk_core PUBLIC
