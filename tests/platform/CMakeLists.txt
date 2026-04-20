@@ -35,4 +35,19 @@ if(APPLE)
         ${FFMPEG_INCLUDE_DIRS}
     )
     add_test(NAME VideoToolboxDecoderTest COMMAND videotoolbox_decoder_test)
+    # AudioUnit renderer test for macOS
+    add_executable(audio_unit_renderer_test audio_unit_renderer_test.mm)
+    target_link_libraries(audio_unit_renderer_test PRIVATE
+        avsdk_platform
+        avsdk_infrastructure
+        GTest::gtest
+        GTest::gtest_main
+        "-framework AudioUnit"
+    )
+    target_include_directories(audio_unit_renderer_test PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+        ${FFMPEG_INCLUDE_DIRS}
+    )
+    add_test(NAME AudioUnitRendererTest COMMAND audio_unit_renderer_test)
 endif()

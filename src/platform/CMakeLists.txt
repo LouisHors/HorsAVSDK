@@ -5,6 +5,7 @@ if(APPLE)
     set(PLATFORM_SOURCES
         macos/metal_renderer.mm
         macos/videotoolbox_decoder.mm
+        macos/audio_unit_renderer.mm
     )
 
     add_library(avsdk_platform STATIC ${PLATFORM_SOURCES})
@@ -23,6 +24,7 @@ if(APPLE)
         "-framework VideoToolbox"
         "-framework CoreVideo"
         "-framework CoreMedia"
+        "-framework AudioUnit"
     )
 
     target_compile_options(avsdk_platform PRIVATE
