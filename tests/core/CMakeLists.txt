@@ -49,3 +49,8 @@ add_test(NAME ffmpeg_encoder_test COMMAND ffmpeg_encoder_test)
 add_executable(data_bypass_test data_bypass_test.cpp)
 target_link_libraries(data_bypass_test PRIVATE avsdk_core GTest::gtest_main)
 add_test(NAME data_bypass_test COMMAND data_bypass_test)
+
+# Screenshot handler test
+add_executable(screenshot_handler_test screenshot_handler_test.cpp)
+target_link_libraries(screenshot_handler_test PRIVATE avsdk_core GTest::gtest_main)
+add_test(NAME screenshot_handler_test COMMAND screenshot_handler_test)

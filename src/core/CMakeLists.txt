@@ -11,6 +11,7 @@ add_library(avsdk_core STATIC
     hls/hls_parser.cpp
     network/retry_policy.cpp
     bypass/data_bypass_manager.cpp
+    bypass/screenshot_handler.cpp
 )
 
 target_include_directories(avsdk_core PUBLIC
