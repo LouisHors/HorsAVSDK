@@ -34,3 +34,8 @@ add_test(NAME network_demuxer_test COMMAND network_demuxer_test)
 add_executable(retry_policy_test retry_policy_test.cpp)
 target_link_libraries(retry_policy_test PRIVATE avsdk_core GTest::gtest_main)
 add_test(NAME retry_policy_test COMMAND retry_policy_test)
+
+# FFmpeg encoder test
+add_executable(ffmpeg_encoder_test ffmpeg_encoder_test.cpp)
+target_link_libraries(ffmpeg_encoder_test PRIVATE avsdk_core GTest::gtest_main)
+add_test(NAME ffmpeg_encoder_test COMMAND ffmpeg_encoder_test)

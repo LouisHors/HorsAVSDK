@@ -5,6 +5,7 @@ add_library(avsdk_core STATIC
     demuxer/ffmpeg_demuxer.cpp
     demuxer/network_demuxer.cpp
     decoder/ffmpeg_decoder.cpp
+    encoder/ffmpeg_encoder.cpp
     player/player_impl.cpp
     buffer/ring_buffer.cpp
     hls/hls_parser.cpp
