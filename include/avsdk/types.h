@@ -24,4 +24,31 @@ struct MediaInfo {
     bool has_audio;
 };
 
+// Data bypass related types
+struct EncodedPacket {
+    uint8_t* data;
+    size_t size;
+    int64_t pts;
+    int64_t dts;
+    bool keyFrame;
+    int streamIndex;
+};
+
+struct VideoFrame {
+    uint8_t* data[4];
+    int linesize[4];
+    VideoResolution resolution;
+    int format;
+    int64_t pts;
+};
+
+struct AudioFrame {
+    uint8_t* data;
+    int samples;
+    int format;
+    int sampleRate;
+    int channels;
+    int64_t pts;
+};
+
 } // namespace avsdk

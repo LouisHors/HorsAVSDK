@@ -2,6 +2,7 @@
 #include "avsdk/player.h"
 #include "avsdk/demuxer.h"
 #include "avsdk/decoder.h"
+#include "avsdk/data_bypass.h"
 #include <atomic>
 #include <thread>
 
@@ -26,8 +27,19 @@ public:
     Timestamp GetCurrentPosition() const override;
     Timestamp GetDuration() const override;
 
+    // Data Bypass methods (Phase 4)
+    void SetDataBypassManager(std::shared_ptr<DataBypassManager> manager) override;
+    std::shared_ptr<DataBypassManager> GetDataBypassManager() override;
+    ErrorCode SetDataBypass(std::shared_ptr<IDataBypass> bypass) override;
+    void EnableVideoFrameCallback(bool enable) override;
+    void EnableAudioFrameCallback(bool enable) override;
+    void SetCallbackVideoFormat(int format) override;
+    void SetCallbackAudioFormat(int format) override;
+
 private:
     void PlaybackLoop();
+    void DispatchDecodedVideoFrame(const VideoFrame& frame);
+    void DispatchDecodedAudioFrame(const AudioFrame& frame);
 
     std::unique_ptr<IDemuxer> demuxer_;
     std::unique_ptr<IDecoder> video_decoder_;
@@ -39,6 +51,13 @@ private:
 
     MediaInfo media_info_;
     PlayerConfig config_;
+
+    // Data Bypass members
+    std::shared_ptr<DataBypassManager> dataBypassManager_;
+    bool enableVideoFrameCallback_ = false;
+    bool enableAudioFrameCallback_ = false;
+    int callbackVideoFormat_ = 0;  // AV_PIX_FMT_YUV420P
+    int callbackAudioFormat_ = 0;  // AV_SAMPLE_FMT_S16
 };
 
 } // namespace avsdk

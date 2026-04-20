@@ -86,6 +86,53 @@ ErrorCode PlayerImpl::Seek(Timestamp position_ms) {
     return demuxer_->Seek(position_ms);
 }
 
+void PlayerImpl::SetDataBypassManager(std::shared_ptr<DataBypassManager> manager) {
+    dataBypassManager_ = manager;
+}
+
+std::shared_ptr<DataBypassManager> PlayerImpl::GetDataBypassManager() {
+    if (!dataBypassManager_) {
+        dataBypassManager_ = std::make_shared<DataBypassManager>();
+    }
+    return dataBypassManager_;
+}
+
+ErrorCode PlayerImpl::SetDataBypass(std::shared_ptr<IDataBypass> bypass) {
+    if (!bypass) {
+        return ErrorCode::InvalidParameter;
+    }
+    GetDataBypassManager()->RegisterBypass(bypass);
+    return ErrorCode::OK;
+}
+
+void PlayerImpl::EnableVideoFrameCallback(bool enable) {
+    enableVideoFrameCallback_ = enable;
+}
+
+void PlayerImpl::EnableAudioFrameCallback(bool enable) {
+    enableAudioFrameCallback_ = enable;
+}
+
+void PlayerImpl::SetCallbackVideoFormat(int format) {
+    callbackVideoFormat_ = format;
+}
+
+void PlayerImpl::SetCallbackAudioFormat(int format) {
+    callbackAudioFormat_ = format;
+}
+
+void PlayerImpl::DispatchDecodedVideoFrame(const VideoFrame& frame) {
+    if (enableVideoFrameCallback_ && dataBypassManager_) {
+        dataBypassManager_->DispatchDecodedVideoFrame(frame);
+    }
+}
+
+void PlayerImpl::DispatchDecodedAudioFrame(const AudioFrame& frame) {
+    if (enableAudioFrameCallback_ && dataBypassManager_) {
+        dataBypassManager_->DispatchDecodedAudioFrame(frame);
+    }
+}
+
 void PlayerImpl::PlaybackLoop() {
     while (!should_stop_ && state_ == PlayerState::kPlaying) {
         if (!demuxer_) break;

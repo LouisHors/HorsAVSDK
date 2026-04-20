@@ -5,39 +5,15 @@
 #include <vector>
 #include <mutex>
 #include <algorithm>
+#include "avsdk/types.h"
 
 namespace avsdk {
 
-struct VideoResolution {
-    int width;
-    int height;
-};
-
-struct EncodedPacket {
-    uint8_t* data;
-    size_t size;
-    int64_t pts;
-    int64_t dts;
-    bool keyFrame;
-    int streamIndex;
-};
-
-struct VideoFrame {
-    uint8_t* data[4];
-    int linesize[4];
-    VideoResolution resolution;
-    int format;
-    int64_t pts;
-};
-
-struct AudioFrame {
-    uint8_t* data;
-    int samples;
-    int format;
-    int sampleRate;
-    int channels;
-    int64_t pts;
-};
+// Data structures are now from types.h
+// - VideoResolution
+// - EncodedPacket (needs to be added to types.h)
+// - VideoFrame (needs to be added to types.h)
+// - AudioFrame (needs to be added to types.h)
 
 // Interface for data bypass callbacks
 class IDataBypass {
