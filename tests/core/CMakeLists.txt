@@ -14,3 +14,8 @@ add_test(NAME player_test COMMAND player_test)
 add_executable(decoder_test decoder_test.cpp)
 target_link_libraries(decoder_test PRIVATE avsdk_core GTest::gtest_main)
 add_test(NAME decoder_test COMMAND decoder_test)
+
+# Ring buffer test
+add_executable(ring_buffer_test ring_buffer_test.cpp)
+target_link_libraries(ring_buffer_test PRIVATE avsdk_core GTest::gtest_main)
+add_test(NAME ring_buffer_test COMMAND ring_buffer_test)
