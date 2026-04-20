@@ -20,6 +20,8 @@ enum class ErrorCode : int32_t {
     FileNotFound = 400,
     FileOpenFailed = 401,
     FileInvalidFormat = 404,
+
+    HardwareNotAvailable = 500,
 };
 
 const char* GetErrorString(ErrorCode code);

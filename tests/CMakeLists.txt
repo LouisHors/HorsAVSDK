@@ -11,3 +11,6 @@ add_subdirectory(infrastructure)
 
 # Core tests
 add_subdirectory(core)
+
+# Platform tests
+add_subdirectory(platform)

@@ -1,3 +1,27 @@
 cmake_minimum_required(VERSION 3.14)
 
-# Placeholder - platform library will be added here
+if(APPLE)
+    # macOS platform library with Metal support
+    set(PLATFORM_SOURCES
+        macos/metal_renderer.mm
+    )
+
+    add_library(avsdk_platform STATIC ${PLATFORM_SOURCES})
+
+    target_include_directories(avsdk_platform PUBLIC
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+        ${FFMPEG_INCLUDE_DIRS}
+    )
+
+    target_link_libraries(avsdk_platform PUBLIC
+        ${FFMPEG_LIBRARIES}
+        avsdk_infrastructure
+        "-framework Metal"
+        "-framework Cocoa"
+    )
+
+    target_compile_options(avsdk_platform PRIVATE
+        -fobjc-arc
+    )
+endif()
