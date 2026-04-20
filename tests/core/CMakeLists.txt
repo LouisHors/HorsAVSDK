@@ -39,3 +39,8 @@ add_test(NAME retry_policy_test COMMAND retry_policy_test)
 add_executable(ffmpeg_encoder_test ffmpeg_encoder_test.cpp)
 target_link_libraries(ffmpeg_encoder_test PRIVATE avsdk_core GTest::gtest_main)
 add_test(NAME ffmpeg_encoder_test COMMAND ffmpeg_encoder_test)
+
+# Data bypass test
+add_executable(data_bypass_test data_bypass_test.cpp)
+target_link_libraries(data_bypass_test PRIVATE avsdk_core GTest::gtest_main)
+add_test(NAME data_bypass_test COMMAND data_bypass_test)

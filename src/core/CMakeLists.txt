@@ -10,6 +10,7 @@ add_library(avsdk_core STATIC
     buffer/ring_buffer.cpp
     hls/hls_parser.cpp
     network/retry_policy.cpp
+    bypass/data_bypass_manager.cpp
 )
 
 target_include_directories(avsdk_core PUBLIC
