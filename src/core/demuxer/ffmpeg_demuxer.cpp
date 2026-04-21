@@ -120,6 +120,22 @@ AVCodecParameters* FFmpegDemuxer::GetAudioCodecParameters() const {
     return format_ctx_->streams[audio_stream_index_]->codecpar;
 }
 
+double FFmpegDemuxer::GetVideoTimebase() const {
+    if (!format_ctx_ || video_stream_index_ < 0) {
+        return 0.0;
+    }
+    AVStream* stream = format_ctx_->streams[video_stream_index_];
+    return av_q2d(stream->time_base);
+}
+
+double FFmpegDemuxer::GetAudioTimebase() const {
+    if (!format_ctx_ || audio_stream_index_ < 0) {
+        return 0.0;
+    }
+    AVStream* stream = format_ctx_->streams[audio_stream_index_];
+    return av_q2d(stream->time_base);
+}
+
 std::unique_ptr<IDemuxer> CreateFFmpegDemuxer() {
     return std::make_unique<FFmpegDemuxer>();
 }

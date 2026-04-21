@@ -5,10 +5,12 @@
 #include "avsdk/renderer.h"
 #include "avsdk/audio_renderer.h"
 #include "avsdk/data_bypass.h"
+#include "audio_clock.h"
 #include <atomic>
 #include <thread>
 #include <vector>
 #include <fstream>
+#include <condition_variable>
 
 extern "C" {
 #include <libswresample/swresample.h>
@@ -83,6 +85,23 @@ private:
     std::ofstream audio_dump_file_;
     bool audio_dump_initialized_ = false;
     int audio_resampled_samples_ = 0;
+
+    // Audio clock for AV sync
+    AudioClock audio_clock_;
+
+    // Video frame queue for sync
+    struct VideoFrameItem {
+        AVFramePtr frame;
+        double pts;  // in seconds
+    };
+    std::vector<VideoFrameItem> video_frame_queue_;
+    std::mutex video_queue_mutex_;
+    std::condition_variable video_queue_cv_;
+    static constexpr size_t kMaxVideoQueueSize = 10;
+
+    // Timebase for video stream
+    double video_timebase_ = 0.0;
+    double audio_timebase_ = 0.0;
 };
 
 } // namespace avsdk

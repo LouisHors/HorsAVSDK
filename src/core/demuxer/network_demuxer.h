@@ -26,6 +26,9 @@ public:
     AVCodecParameters* GetVideoCodecParameters() const override;
     AVCodecParameters* GetAudioCodecParameters() const override;
 
+    double GetVideoTimebase() const override;
+    double GetAudioTimebase() const override;
+
     // Network specific
     void SetBufferSize(size_t size);
     int64_t GetBufferedDuration() const;

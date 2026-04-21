@@ -151,6 +151,22 @@ AVCodecParameters* NetworkDemuxer::GetAudioCodecParameters() const {
     return format_ctx_->streams[audio_stream_index_]->codecpar;
 }
 
+double NetworkDemuxer::GetVideoTimebase() const {
+    if (!format_ctx_ || video_stream_index_ < 0) {
+        return 0.0;
+    }
+    AVStream* stream = format_ctx_->streams[video_stream_index_];
+    return av_q2d(stream->time_base);
+}
+
+double NetworkDemuxer::GetAudioTimebase() const {
+    if (!format_ctx_ || audio_stream_index_ < 0) {
+        return 0.0;
+    }
+    AVStream* stream = format_ctx_->streams[audio_stream_index_];
+    return av_q2d(stream->time_base);
+}
+
 void NetworkDemuxer::SetBufferSize(size_t size) {
     // TODO: Implement dynamic buffer resize
 }

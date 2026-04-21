@@ -12,7 +12,7 @@ extern "C" {
 
 // Platform audio renderer factory
 #if defined(__APPLE__)
-#include "audio_unit_renderer.h"
+#include "platform/macos/audio_unit_renderer.h"
 #endif
 
 namespace avsdk {
@@ -59,6 +59,12 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
     }
 
     media_info_ = demuxer_->GetMediaInfo();
+
+    // Get timebases for AV sync
+    video_timebase_ = demuxer_->GetVideoTimebase();
+    audio_timebase_ = demuxer_->GetAudioTimebase();
+    LOG_INFO("Player", "Timebases - Video: " + std::to_string(video_timebase_) +
+             ", Audio: " + std::to_string(audio_timebase_));
 
     // Initialize decoders
     if (media_info_.has_video) {
@@ -275,9 +281,12 @@ void PlayerImpl::PlaybackLoop() {
              ", audio stream index: " + std::to_string(audioStreamIndex));
 
     // Pre-buffer audio before starting playback
-    // This ensures audio playback doesn't start with empty buffer
     bool audio_prebuffered = false;
     int audio_packets_decoded = 0;
+    int64_t total_audio_samples = 0;
+
+    // Start audio clock
+    audio_clock_.Reset();
 
     while (!should_stop_ && state_ == PlayerState::kPlaying) {
         if (!demuxer_) break;
@@ -289,10 +298,36 @@ void PlayerImpl::PlaybackLoop() {
 
         // Process video packets
         if (packet->stream_index == videoStreamIndex && videoStreamIndex >= 0) {
-            // Decode video and render
+            // Decode video and render with sync
             if (video_decoder_ && video_renderer_) {
                 auto frame = video_decoder_->Decode(packet);
                 if (frame) {
+                    // Calculate PTS in seconds
+                    double frame_pts = frame->pts * video_timebase_;
+
+                    // Wait for sync if audio is playing (audio is master clock)
+                    if (audioStreamIndex >= 0 && audio_prebuffered) {
+                        int64_t delay_ms = audio_clock_.GetVideoDelayMs(frame_pts);
+
+                        // If frame is early, wait
+                        if (delay_ms > 5) {
+                            if (delay_ms > 100) {
+                                // Cap max wait to prevent long stalls
+                                delay_ms = 100;
+                            }
+                            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+                        }
+                        // If frame is very late (>100ms), skip it
+                        else if (delay_ms < -100) {
+                            LOG_INFO("Player", "Skipping late video frame, PTS: " + std::to_string(frame_pts) +
+                                     ", delay: " + std::to_string(delay_ms) + "ms");
+                            continue;
+                        }
+                    } else if (audioStreamIndex < 0) {
+                        // No audio - use simple frame rate control
+                        std::this_thread::sleep_for(std::chrono::milliseconds(33));
+                    }
+
                     RenderVideoFrame(frame.get());
 
                     // Also dispatch for data bypass callbacks
@@ -310,15 +345,15 @@ void PlayerImpl::PlaybackLoop() {
                     DispatchDecodedVideoFrame(vf);
                 }
             }
-
-            // Frame rate control for video (33ms ~ 30fps)
-            std::this_thread::sleep_for(std::chrono::milliseconds(33));
         }
         // Process audio packets
         else if (packet->stream_index == audioStreamIndex && audioStreamIndex >= 0) {
             if (audio_decoder_ && audio_renderer_) {
                 auto frame = audio_decoder_->Decode(packet);
                 if (frame) {
+                    // Calculate audio PTS
+                    double audio_pts = frame->pts * audio_timebase_;
+
                     // Check if resampling is needed
                     AVSampleFormat srcFormat = static_cast<AVSampleFormat>(frame->format);
                     if (srcFormat != AV_SAMPLE_FMT_S16 && swr_context_) {
@@ -339,22 +374,18 @@ void PlayerImpl::PlaybackLoop() {
                                                             const_cast<const uint8_t**>(frame->data), frame->nb_samples);
                         if (converted_samples > 0) {
                             int data_size = converted_samples * out_channels * sizeof(int16_t);
-
-                            // Debug: dump audio data BEFORE writing to renderer
-                            if (!audio_dump_initialized_) {
-                                audio_dump_file_.open("/tmp/audio_dump.pcm", std::ios::binary);
-                                audio_dump_initialized_ = true;
-                                LOG_INFO("Player", "Audio dump started: /tmp/audio_dump.pcm");
-                            }
-                            if (audio_dump_file_.is_open()) {
-                                audio_dump_file_.write(reinterpret_cast<const char*>(audio_resample_buffer_.data()), data_size);
-                            }
-
                             audio_renderer_->WriteAudio(audio_resample_buffer_.data(), data_size);
+
+                            // Update audio clock
+                            if (audio_prebuffered) {
+                                total_audio_samples += converted_samples;
+                                audio_clock_.UpdateBySamples(converted_samples, frame->sample_rate);
+                            }
 
                             // Track pre-buffer progress
                             if (!audio_prebuffered) {
                                 audio_packets_decoded++;
+                                total_audio_samples += converted_samples;
                             }
                         }
                     } else if (srcFormat == AV_SAMPLE_FMT_S16) {
@@ -364,6 +395,17 @@ void PlayerImpl::PlaybackLoop() {
                                                                     static_cast<AVSampleFormat>(frame->format), 1);
                         if (data_size > 0) {
                             audio_renderer_->WriteAudio(frame->data[0], data_size);
+
+                            // Update audio clock
+                            if (audio_prebuffered) {
+                                total_audio_samples += frame->nb_samples;
+                                audio_clock_.UpdateBySamples(frame->nb_samples, frame->sample_rate);
+                            }
+
+                            if (!audio_prebuffered) {
+                                audio_packets_decoded++;
+                                total_audio_samples += frame->nb_samples;
+                            }
                         }
                     } else {
                         LOG_WARNING("Player", "Audio format not supported: " + std::to_string(srcFormat));
@@ -384,29 +426,27 @@ void PlayerImpl::PlaybackLoop() {
                     DispatchDecodedAudioFrame(af);
                 }
             }
-
-            // For audio-only, use smaller sleep to prevent buffer underrun
-            if (videoStreamIndex < 0) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
         }
 
         // Start audio playback after pre-buffering some data
         if (!audio_prebuffered && audio_renderer_ && audio_packets_decoded >= 40) {  // ~1 second of audio
+            // Initialize audio clock with first audio PTS
+            audio_clock_.UpdateByPTS(0.0);  // Start from 0
+            audio_clock_.Start();
             audio_renderer_->Play();
             audio_prebuffered = true;
             LOG_INFO("Player", "Audio playback started after pre-buffering " +
-                     std::to_string(audio_packets_decoded) + " packets");
+                     std::to_string(audio_packets_decoded) + " packets, samples: " + std::to_string(total_audio_samples));
         }
-
-        // Simple frame rate control (33ms ~ 30fps)
-        // std::this_thread::sleep_for(std::chrono::milliseconds(33));
     }
 
     // Stop audio playback
     if (audio_renderer_) {
         audio_renderer_->Stop();
     }
+
+    // Stop audio clock
+    audio_clock_.Stop();
 
     if (state_ == PlayerState::kPlaying) {
         state_ = PlayerState::kStopped;

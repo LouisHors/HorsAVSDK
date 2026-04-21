@@ -7,6 +7,7 @@ add_library(avsdk_core STATIC
     decoder/ffmpeg_decoder.cpp
     encoder/ffmpeg_encoder.cpp
     player/player_impl.cpp
+    player/audio_clock.cpp
     buffer/ring_buffer.cpp
     hls/hls_parser.cpp
     network/retry_policy.cpp

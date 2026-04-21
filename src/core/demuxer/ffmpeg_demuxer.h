@@ -22,6 +22,9 @@ public:
     AVCodecParameters* GetVideoCodecParameters() const override;
     AVCodecParameters* GetAudioCodecParameters() const override;
 
+    double GetVideoTimebase() const override;
+    double GetAudioTimebase() const override;
+
 private:
     AVFormatContext* format_ctx_ = nullptr;
     int video_stream_index_ = -1;
