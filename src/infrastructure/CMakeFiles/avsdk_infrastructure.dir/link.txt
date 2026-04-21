@@ -1,0 +1,2 @@
+/usr/bin/ar qc libavsdk_infrastructure.a CMakeFiles/avsdk_infrastructure.dir/logger.cpp.o CMakeFiles/avsdk_infrastructure.dir/memory_pool.cpp.o
+/usr/bin/ranlib libavsdk_infrastructure.a

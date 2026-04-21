@@ -44,6 +44,7 @@ struct VideoFrame {
 
 struct AudioFrame {
     uint8_t* data;
+    int size;           // Data size in bytes
     int samples;
     int format;
     int sampleRate;

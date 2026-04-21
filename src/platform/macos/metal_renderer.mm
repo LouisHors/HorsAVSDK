@@ -52,6 +52,8 @@ ErrorCode MetalRenderer::Initialize(void* native_window, int width, int height) 
         view.device = device;
         view.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
         view.depthStencilPixelFormat = MTLPixelFormatInvalid;
+        // Cache the metal layer on main thread to avoid background thread access
+        metal_layer_ = (__bridge_retained void*)view.layer;
     }
 
     // Load shaders from default library
@@ -163,8 +165,11 @@ ErrorCode MetalRenderer::RenderFrame(const AVFrame* frame) {
         return ErrorCode::InvalidParameter;
     }
 
-    // Get drawable from CAMetalLayer
-    CAMetalLayer* metalLayer = (CAMetalLayer*)view.layer;
+    // Get drawable from cached CAMetalLayer (avoid accessing view.layer on background thread)
+    CAMetalLayer* metalLayer = (__bridge CAMetalLayer*)metal_layer_;
+    if (!metalLayer) {
+        return ErrorCode::InvalidParameter;
+    }
     id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
     if (!drawable) {
         // No drawable available, skip this frame
@@ -263,6 +268,10 @@ ErrorCode MetalRenderer::RenderFrame(const AVFrame* frame) {
 }
 
 void MetalRenderer::Release() {
+    if (metal_layer_) {
+        CFRelease(metal_layer_);
+        metal_layer_ = nullptr;
+    }
     if (view_) {
         CFRelease(view_);
         view_ = nullptr;

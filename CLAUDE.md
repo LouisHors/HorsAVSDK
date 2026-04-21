@@ -12,7 +12,10 @@ HorsAVSDK is a cross-platform audio/video SDK based on FFmpeg. It provides playb
 - Platform-specific adapters: VideoToolbox (Apple), MediaCodec (Android), DXVA/D3D11VA (Windows)
 
 **Development Strategy:**
-- Phase 1: Local file playback (macOS first as validation platform)
+- Phase 1: Local file playback (macOS first as validation platform) ✅
+  - Video playback with FFmpeg decoding and Metal rendering ✅
+  - Audio playback with FFmpeg decoding and AudioUnit rendering ✅
+  - Basic AV sync ✅
 - Phase 2: Network streaming (RTMP, HLS, FLV over HTTP)
 - Phase 3: Real-time encoding and capture
 - Phase 4: Data bypass callbacks for all pipeline stages

@@ -24,6 +24,7 @@ public:
     virtual int GetVideoStreamIndex() const = 0;
     virtual int GetAudioStreamIndex() const = 0;
     virtual AVCodecParameters* GetVideoCodecParameters() const = 0;
+    virtual AVCodecParameters* GetAudioCodecParameters() const = 0;
 };
 
 std::unique_ptr<IDemuxer> CreateFFmpegDemuxer();

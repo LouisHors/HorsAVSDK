@@ -3,9 +3,17 @@
 #include "avsdk/demuxer.h"
 #include "avsdk/decoder.h"
 #include "avsdk/renderer.h"
+#include "avsdk/audio_renderer.h"
 #include "avsdk/data_bypass.h"
 #include <atomic>
 #include <thread>
+#include <vector>
+#include <fstream>
+
+extern "C" {
+#include <libswresample/swresample.h>
+#include <libavutil/channel_layout.h>
+}
 
 namespace avsdk {
 
@@ -50,6 +58,7 @@ private:
     std::unique_ptr<IDecoder> video_decoder_;
     std::unique_ptr<IDecoder> audio_decoder_;
     std::shared_ptr<IRenderer> video_renderer_;
+    std::unique_ptr<IAudioRenderer> audio_renderer_;
 
     std::atomic<PlayerState> state_{PlayerState::kIdle};
     std::thread playback_thread_;
@@ -65,6 +74,15 @@ private:
     bool enableAudioFrameCallback_ = false;
     int callbackVideoFormat_ = 0;  // AV_PIX_FMT_YUV420P
     int callbackAudioFormat_ = 0;  // AV_SAMPLE_FMT_S16
+
+    // Audio resampling
+    SwrContext* swr_context_ = nullptr;
+    std::vector<uint8_t> audio_resample_buffer_;
+
+    // Debug: audio dump
+    std::ofstream audio_dump_file_;
+    bool audio_dump_initialized_ = false;
+    int audio_resampled_samples_ = 0;
 };
 
 } // namespace avsdk

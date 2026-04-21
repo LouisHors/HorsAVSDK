@@ -172,7 +172,7 @@
 
 - (void)openFile:(id)sender {
     NSOpenPanel *openPanel = [NSOpenPanel openPanel];
-    openPanel.allowedFileTypes = @[@"mp4", @"mov", @"avi", @"mkv", @"flv", @"wmv", @"m4v", @"3gp", @"mpg", @"mpeg"];
+    openPanel.allowedFileTypes = @[@"mp4", @"mov", @"avi", @"mkv", @"flv", @"wmv", @"m4v", @"3gp", @"mpg", @"mpeg", @"m4a", @"mp3"];
     openPanel.allowsMultipleSelection = NO;
     openPanel.canChooseDirectories = NO;
     openPanel.canChooseFiles = YES;
@@ -278,6 +278,13 @@
         double progress = position / duration;
         self.progressSlider.doubleValue = progress;
         [self updateTimeLabelWithPosition:position duration:duration];
+
+        // Add audio buffer info to time label
+        // Get buffered duration from player if available
+        NSString *positionStr = [self formatTime:position];
+        NSString *durationStr = [self formatTime:duration];
+        [self.timeLabel setStringValue:[NSString stringWithFormat:@"%@ / %@ (%.0f%%)",
+                                        positionStr, durationStr, progress * 100]];
     }
 }
 
@@ -291,7 +298,8 @@
 - (void)updateTimeLabelWithPosition:(double)position duration:(double)duration {
     NSString *positionStr = [self formatTime:position];
     NSString *durationStr = [self formatTime:duration];
-    [self.timeLabel setStringValue:[NSString stringWithFormat:@"%@ / %@", positionStr, durationStr]];
+    double progress = duration > 0 ? (position / duration) : 0;
+    [self.timeLabel setStringValue:[NSString stringWithFormat:@"%@ / %@ (%.0f%%)", positionStr, durationStr, progress * 100]];
 }
 
 #pragma mark - PlayerViewDelegate

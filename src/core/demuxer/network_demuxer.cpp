@@ -144,6 +144,13 @@ AVCodecParameters* NetworkDemuxer::GetVideoCodecParameters() const {
     return format_ctx_->streams[video_stream_index_]->codecpar;
 }
 
+AVCodecParameters* NetworkDemuxer::GetAudioCodecParameters() const {
+    if (!format_ctx_ || audio_stream_index_ < 0) {
+        return nullptr;
+    }
+    return format_ctx_->streams[audio_stream_index_]->codecpar;
+}
+
 void NetworkDemuxer::SetBufferSize(size_t size) {
     // TODO: Implement dynamic buffer resize
 }

@@ -20,6 +20,7 @@ public:
     int GetVideoStreamIndex() const override { return video_stream_index_; }
     int GetAudioStreamIndex() const override { return audio_stream_index_; }
     AVCodecParameters* GetVideoCodecParameters() const override;
+    AVCodecParameters* GetAudioCodecParameters() const override;
 
 private:
     AVFormatContext* format_ctx_ = nullptr;

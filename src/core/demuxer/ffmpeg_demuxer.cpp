@@ -113,6 +113,13 @@ AVCodecParameters* FFmpegDemuxer::GetVideoCodecParameters() const {
     return format_ctx_->streams[video_stream_index_]->codecpar;
 }
 
+AVCodecParameters* FFmpegDemuxer::GetAudioCodecParameters() const {
+    if (!format_ctx_ || audio_stream_index_ < 0) {
+        return nullptr;
+    }
+    return format_ctx_->streams[audio_stream_index_]->codecpar;
+}
+
 std::unique_ptr<IDemuxer> CreateFFmpegDemuxer() {
     return std::make_unique<FFmpegDemuxer>();
 }

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libavsdk_network.a CMakeFiles/avsdk_network.dir/http_client.cpp.o
+/usr/bin/ranlib libavsdk_network.a

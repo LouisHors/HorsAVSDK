@@ -10,7 +10,10 @@ HorsAVSDK is a **cross-platform audio/video SDK** based on FFmpeg, providing pla
 - **Platform APIs**: VideoToolbox/MediaCodec/DXVA for hardware acceleration, Metal/OpenGL ES/DirectX for rendering
 
 **Development Phases:**
-- Phase 1: Local file playback (macOS first as validation platform)
+- Phase 1: Local file playback (macOS first as validation platform) ✅
+  - Video playback: FFmpeg decoding + Metal rendering ✅
+  - Audio playback: FFmpeg decoding + AudioUnit rendering ✅
+  - Basic AV sync ✅
 - Phase 2: Network streaming (RTMP, HLS, FLV over HTTP)
 - Phase 3: Real-time encoding and capture
 - Phase 4: Data bypass callbacks for all pipeline stages
@@ -367,10 +370,24 @@ All project documentation, design decisions, and task tracking are stored in the
 - `docs/context/` - Context documents and reference materials (PRDs, specs)
 
 ### Key Reference Documents
-- `docs/context/跨平台音视频SDK_PRD.md` - Product requirements
-- `docs/context/media_sdk_architecture_design.md` - Architecture details
-- `docs/context/av_sdk_interface_design.md` - API specifications
-- `docs/context/ffmpeg_sdk_technical_solution.md` - FFmpeg implementation
+
+#### 产品需求与架构
+- `docs/context/跨平台音视频SDK_PRD.md` - 产品需求文档
+- `docs/context/media_sdk_architecture_design.md` - 初始架构设计文档
+- `docs/context/ffmpeg_sdk_technical_solution.md` - FFmpeg 技术方案
+- `docs/context/跨平台音视频SDK完整技术方案.md` - 完整技术方案
+
+#### 当前实现文档 (v1.0 里程碑)
+- `docs/context/sdk_architecture_current.md` - 当前 SDK 架构（必读）
+- `docs/context/sdk_interface_design.md` - SDK 接口设计规范
+- `docs/context/player_impl_design.md` - PlayerImpl 实现详解
+- `docs/context/metal_rendering_strategy.md` - macOS Metal 渲染策略
+
+#### 开发前必读
+1. **新功能开发**: 先阅读 `sdk_architecture_current.md` 了解当前结构
+2. **接口变更**: 参考 `sdk_interface_design.md` 确保接口一致性
+3. **macOS 渲染**: 参考 `metal_rendering_strategy.md` 了解渲染管线
+4. **播放器逻辑**: 参考 `player_impl_design.md` 了解播放流程
 
 ### Documentation Conventions
 - Use Markdown format for all documentation
@@ -378,6 +395,37 @@ All project documentation, design decisions, and task tracking are stored in the
 - Keep documents focused and concise
 - Update status as work progresses
 - Archive completed documents regularly
+
+---
+
+## Development Workflow
+
+### 开发前必读
+
+在开展任何新功能开发之前，必须完成以下步骤：
+
+1. **阅读架构文档**: 
+   - 阅读 `docs/context/sdk_architecture_current.md` 了解当前 SDK 结构和已实现功能
+   - 了解当前限制和已知问题
+
+2. **阅读接口设计**:
+   - 阅读 `docs/context/sdk_interface_design.md` 了解公共接口规范
+   - 确保新功能与现有接口兼容
+
+3. **阅读相关实现**:
+   - 如果是播放器功能，阅读 `docs/context/player_impl_design.md`
+   - 如果是 macOS 渲染功能，阅读 `docs/context/metal_rendering_strategy.md`
+
+4. **更新文档**:
+   - 开发完成后，更新相关文档以反映新的实现
+   - 在文档中添加变更历史和版本号
+
+### 文档维护规范
+
+- **创建新功能**: 创建设计文档到 `docs/context/` 或 `docs/plans/`
+- **修改现有功能**: 更新对应的现有文档
+- **修复 bug**: 在相关文档中添加已知问题章节
+- **里程碑**: 在 `sdk_architecture_current.md` 中更新实现状态表格
 
 ---
 

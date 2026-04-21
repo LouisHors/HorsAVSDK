@@ -39,9 +39,7 @@ private:
     int volume_ = 100;
 
     std::vector<uint8_t> audio_buffer_;
-    size_t write_pos_ = 0;
-    size_t read_pos_ = 0;
-    size_t buffered_size_ = 0;
+    size_t read_offset_ = 0;
     mutable std::mutex buffer_mutex_;
 };
 

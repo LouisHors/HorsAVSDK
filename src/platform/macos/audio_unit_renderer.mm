@@ -1,6 +1,9 @@
 #import "audio_unit_renderer.h"
 #include "avsdk/logger.h"
 #import <AudioUnit/AudioUnit.h>
+#include <thread>
+#include <chrono>
+#include <cstring>
 
 namespace avsdk {
 
@@ -35,7 +38,7 @@ ErrorCode AudioUnitRenderer::Initialize(const AudioFormat& format) {
     AudioStreamBasicDescription stream_format = {};
     stream_format.mSampleRate = format.sample_rate;
     stream_format.mFormatID = kAudioFormatLinearPCM;
-    stream_format.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked;
+    stream_format.mFormatFlags = kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked | kAudioFormatFlagsNativeEndian;
     stream_format.mBytesPerPacket = format.channels * (format.bits_per_sample / 8);
     stream_format.mFramesPerPacket = 1;
     stream_format.mBytesPerFrame = stream_format.mBytesPerPacket;
@@ -45,7 +48,7 @@ ErrorCode AudioUnitRenderer::Initialize(const AudioFormat& format) {
     status = AudioUnitSetProperty(audio_unit_, kAudioUnitProperty_StreamFormat,
                                    kAudioUnitScope_Input, 0, &stream_format, sizeof(stream_format));
     if (status != noErr) {
-        LOG_ERROR("AudioUnit", "Failed to set stream format");
+        LOG_ERROR("AudioUnit", "Failed to set stream format: " + std::to_string(status));
         return ErrorCode::HardwareNotAvailable;
     }
 
@@ -56,19 +59,22 @@ ErrorCode AudioUnitRenderer::Initialize(const AudioFormat& format) {
     status = AudioUnitSetProperty(audio_unit_, kAudioUnitProperty_SetRenderCallback,
                                    kAudioUnitScope_Input, 0, &callback_struct, sizeof(callback_struct));
     if (status != noErr) {
-        LOG_ERROR("AudioUnit", "Failed to set render callback");
+        LOG_ERROR("AudioUnit", "Failed to set render callback: " + std::to_string(status));
         return ErrorCode::HardwareNotAvailable;
     }
 
     status = AudioUnitInitialize(audio_unit_);
     if (status != noErr) {
-        LOG_ERROR("AudioUnit", "Failed to initialize audio unit");
+        LOG_ERROR("AudioUnit", "Failed to initialize audio unit: " + std::to_string(status));
         return ErrorCode::HardwareNotAvailable;
     }
 
-    // Allocate 1 second buffer
-    size_t buffer_size = format.sample_rate * format.channels * (format.bits_per_sample / 8);
-    audio_buffer_.resize(buffer_size);
+    // Reset buffer
+    {
+        std::lock_guard<std::mutex> lock(buffer_mutex_);
+        audio_buffer_.clear();
+        read_offset_ = 0;
+    }
 
     LOG_INFO("AudioUnit", "Initialized " + std::to_string(format.sample_rate) + "Hz audio");
     return ErrorCode::OK;
@@ -87,8 +93,22 @@ void AudioUnitRenderer::Close() {
 ErrorCode AudioUnitRenderer::Play() {
     if (!audio_unit_) return ErrorCode::NotInitialized;
 
+    // Wait for enough data (at least 0.3 seconds)
+    int wait_count = 0;
+    while (wait_count < 100) {
+        {
+            std::lock_guard<std::mutex> lock(buffer_mutex_);
+            size_t buffered = audio_buffer_.size() - read_offset_;
+            size_t bytes_300ms = format_.sample_rate * format_.channels * (format_.bits_per_sample / 8) * 3 / 10;
+            if (buffered >= bytes_300ms) break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        wait_count++;
+    }
+
     OSStatus status = AudioOutputUnitStart(audio_unit_);
     if (status != noErr) {
+        LOG_ERROR("AudioUnit", "Failed to start: " + std::to_string(status));
         return ErrorCode::HardwareNotAvailable;
     }
 
@@ -116,9 +136,8 @@ ErrorCode AudioUnitRenderer::Stop() {
     AudioOutputUnitStop(audio_unit_);
 
     std::lock_guard<std::mutex> lock(buffer_mutex_);
-    write_pos_ = 0;
-    read_pos_ = 0;
-    buffered_size_ = 0;
+    audio_buffer_.clear();
+    read_offset_ = 0;
 
     state_ = RendererState::kStopped;
     LOG_INFO("AudioUnit", "Stopped playback");
@@ -135,27 +154,25 @@ void AudioUnitRenderer::SetVolume(int volume) {
 }
 
 int AudioUnitRenderer::WriteAudio(const uint8_t* data, size_t size) {
+    if (size == 0) return 0;
+
     std::lock_guard<std::mutex> lock(buffer_mutex_);
 
-    size_t written = 0;
-    while (written < size && buffered_size_ < audio_buffer_.size()) {
-        size_t pos = write_pos_ % audio_buffer_.size();
-        size_t chunk = std::min(size - written, audio_buffer_.size() - pos);
-        std::copy(data + written, data + written + chunk, audio_buffer_.begin() + pos);
-        write_pos_ += chunk;
-        written += chunk;
-        buffered_size_ += chunk;
-    }
+    // Simple: append to buffer
+    size_t old_size = audio_buffer_.size();
+    audio_buffer_.resize(old_size + size);
+    std::memcpy(audio_buffer_.data() + old_size, data, size);
 
-    return static_cast<int>(written);
+    return static_cast<int>(size);
 }
 
 int AudioUnitRenderer::GetBufferedDuration() const {
     std::lock_guard<std::mutex> lock(buffer_mutex_);
 
+    size_t remaining = audio_buffer_.size() - read_offset_;
     int bytes_per_ms = (format_.sample_rate * format_.channels * (format_.bits_per_sample / 8)) / 1000;
     if (bytes_per_ms == 0) return 0;
-    return static_cast<int>(buffered_size_ / bytes_per_ms);
+    return static_cast<int>(remaining / bytes_per_ms);
 }
 
 OSStatus AudioUnitRenderer::RenderCallback(void* inRefCon,
@@ -165,33 +182,49 @@ OSStatus AudioUnitRenderer::RenderCallback(void* inRefCon,
                                            UInt32 inNumberFrames,
                                            AudioBufferList* ioData) {
     auto* renderer = static_cast<AudioUnitRenderer*>(inRefCon);
-    std::lock_guard<std::mutex> lock(renderer->buffer_mutex_);
 
     AudioBuffer* buffer = &ioData->mBuffers[0];
-    UInt32 bytes_to_copy = inNumberFrames * renderer->format_.channels * (renderer->format_.bits_per_sample / 8);
+    uint8_t* outBuffer = static_cast<uint8_t*>(buffer->mData);
 
-    bytes_to_copy = std::min(bytes_to_copy, static_cast<UInt32>(renderer->buffered_size_));
-    bytes_to_copy = std::min(bytes_to_copy, buffer->mDataByteSize);
+    size_t bytes_per_frame = renderer->format_.channels * (renderer->format_.bits_per_sample / 8);
+    size_t bytes_needed = inNumberFrames * bytes_per_frame;
 
-    if (bytes_to_copy > 0) {
-        size_t pos = renderer->read_pos_ % renderer->audio_buffer_.size();
-        size_t chunk = std::min(static_cast<size_t>(bytes_to_copy), renderer->audio_buffer_.size() - pos);
+    // Quick lock - minimize time in callback
+    size_t to_copy = 0;
+    size_t read_pos = 0;
+    {
+        std::lock_guard<std::mutex> lock(renderer->buffer_mutex_);
+        size_t available = renderer->audio_buffer_.size() - renderer->read_offset_;
+        to_copy = std::min(bytes_needed, available);
+        read_pos = renderer->read_offset_;
+        renderer->read_offset_ += to_copy;
+    }
 
-        std::copy(renderer->audio_buffer_.begin() + pos,
-                  renderer->audio_buffer_.begin() + pos + chunk,
-                  static_cast<uint8_t*>(buffer->mData));
+    // Copy data outside of lock (data won't be modified by writer until we release)
+    if (to_copy > 0) {
+        std::memcpy(outBuffer, renderer->audio_buffer_.data() + read_pos, to_copy);
+    }
 
-        if (bytes_to_copy > chunk) {
-            std::copy(renderer->audio_buffer_.begin(),
-                      renderer->audio_buffer_.begin() + (bytes_to_copy - chunk),
-                      static_cast<uint8_t*>(buffer->mData) + chunk);
+    // Fill remaining with silence
+    if (to_copy < bytes_needed) {
+        std::memset(outBuffer + to_copy, 0, bytes_needed - to_copy);
+    }
+
+    // Periodically trim consumed buffer (not in every callback)
+    static thread_local int call_count = 0;
+    if (++call_count % 100 == 0) {
+        std::lock_guard<std::mutex> lock(renderer->buffer_mutex_);
+        if (renderer->read_offset_ > renderer->audio_buffer_.size() / 2) {
+            // Move remaining data to front
+            size_t remaining = renderer->audio_buffer_.size() - renderer->read_offset_;
+            if (remaining > 0) {
+                std::memmove(renderer->audio_buffer_.data(),
+                            renderer->audio_buffer_.data() + renderer->read_offset_,
+                            remaining);
+            }
+            renderer->audio_buffer_.resize(remaining);
+            renderer->read_offset_ = 0;
         }
-
-        renderer->read_pos_ += bytes_to_copy;
-        renderer->buffered_size_ -= bytes_to_copy;
-        buffer->mDataByteSize = bytes_to_copy;
-    } else {
-        memset(buffer->mData, 0, buffer->mDataByteSize);
     }
 
     return noErr;

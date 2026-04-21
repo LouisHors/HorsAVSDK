@@ -21,6 +21,7 @@ private:
     void* vertex_buffer_ = nullptr;
     void* index_buffer_ = nullptr;
     void* library_ = nullptr;
+    void* metal_layer_ = nullptr;  // Cached CAMetalLayer reference
     int width_ = 0;
     int height_ = 0;
 };
