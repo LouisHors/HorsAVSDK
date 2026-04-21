@@ -1,5 +1,6 @@
 #pragma once
 #include "avsdk/audio_renderer.h"
+#include "avsdk/ring_buffer.h"
 #import <AudioUnit/AudioUnit.h>
 #include <mutex>
 #include <vector>
@@ -38,9 +39,8 @@ private:
     RendererState state_ = RendererState::kStopped;
     int volume_ = 100;
 
-    std::vector<uint8_t> audio_buffer_;
-    size_t read_offset_ = 0;
-    mutable std::mutex buffer_mutex_;
+    std::unique_ptr<RingBuffer> ring_buffer_;
+    static constexpr size_t kBufferCapacity = 256 * 1024; // 256KB ring buffer
 };
 
 } // namespace avsdk

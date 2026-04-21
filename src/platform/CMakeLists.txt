@@ -19,6 +19,7 @@ if(APPLE)
     target_link_libraries(avsdk_platform PUBLIC
         ${FFMPEG_LIBRARIES}
         avsdk_infrastructure
+        avsdk_core
         "-framework Metal"
         "-framework Cocoa"
         "-framework VideoToolbox"

@@ -69,14 +69,10 @@ ErrorCode AudioUnitRenderer::Initialize(const AudioFormat& format) {
         return ErrorCode::HardwareNotAvailable;
     }
 
-    // Reset buffer
-    {
-        std::lock_guard<std::mutex> lock(buffer_mutex_);
-        audio_buffer_.clear();
-        read_offset_ = 0;
-    }
+    // Create ring buffer
+    ring_buffer_ = std::make_unique<RingBuffer>(256 * 1024);
 
-    LOG_INFO("AudioUnit", "Initialized " + std::to_string(format.sample_rate) + "Hz audio");
+    LOG_INFO("AudioUnit", "Initialized " + std::to_string(format.sample_rate) + "Hz audio with ring buffer");
     return ErrorCode::OK;
 }
 
@@ -88,6 +84,8 @@ void AudioUnitRenderer::Close() {
         AudioComponentInstanceDispose(audio_unit_);
         audio_unit_ = nullptr;
     }
+
+    ring_buffer_.reset();
 }
 
 ErrorCode AudioUnitRenderer::Play() {
@@ -95,12 +93,10 @@ ErrorCode AudioUnitRenderer::Play() {
 
     // Wait for enough data (at least 0.3 seconds)
     int wait_count = 0;
+    int bytes_per_300ms = format_.sample_rate * format_.channels * (format_.bits_per_sample / 8) * 3 / 10;
     while (wait_count < 100) {
-        {
-            std::lock_guard<std::mutex> lock(buffer_mutex_);
-            size_t buffered = audio_buffer_.size() - read_offset_;
-            size_t bytes_300ms = format_.sample_rate * format_.channels * (format_.bits_per_sample / 8) * 3 / 10;
-            if (buffered >= bytes_300ms) break;
+        if (ring_buffer_->AvailableToRead() >= static_cast<size_t>(bytes_per_300ms)) {
+            break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
         wait_count++;
@@ -135,9 +131,9 @@ ErrorCode AudioUnitRenderer::Stop() {
 
     AudioOutputUnitStop(audio_unit_);
 
-    std::lock_guard<std::mutex> lock(buffer_mutex_);
-    audio_buffer_.clear();
-    read_offset_ = 0;
+    if (ring_buffer_) {
+        ring_buffer_->Clear();
+    }
 
     state_ = RendererState::kStopped;
     LOG_INFO("AudioUnit", "Stopped playback");
@@ -154,25 +150,20 @@ void AudioUnitRenderer::SetVolume(int volume) {
 }
 
 int AudioUnitRenderer::WriteAudio(const uint8_t* data, size_t size) {
-    if (size == 0) return 0;
+    if (!ring_buffer_ || size == 0) return 0;
 
-    std::lock_guard<std::mutex> lock(buffer_mutex_);
-
-    // Simple: append to buffer
-    size_t old_size = audio_buffer_.size();
-    audio_buffer_.resize(old_size + size);
-    std::memcpy(audio_buffer_.data() + old_size, data, size);
-
-    return static_cast<int>(size);
+    // Write to ring buffer (RingBuffer handles locking internally)
+    size_t written = ring_buffer_->Write(data, size);
+    return static_cast<int>(written);
 }
 
 int AudioUnitRenderer::GetBufferedDuration() const {
-    std::lock_guard<std::mutex> lock(buffer_mutex_);
+    if (!ring_buffer_) return 0;
 
-    size_t remaining = audio_buffer_.size() - read_offset_;
+    size_t available = ring_buffer_->AvailableToRead();
     int bytes_per_ms = (format_.sample_rate * format_.channels * (format_.bits_per_sample / 8)) / 1000;
     if (bytes_per_ms == 0) return 0;
-    return static_cast<int>(remaining / bytes_per_ms);
+    return static_cast<int>(available / bytes_per_ms);
 }
 
 OSStatus AudioUnitRenderer::RenderCallback(void* inRefCon,
@@ -183,48 +174,23 @@ OSStatus AudioUnitRenderer::RenderCallback(void* inRefCon,
                                            AudioBufferList* ioData) {
     auto* renderer = static_cast<AudioUnitRenderer*>(inRefCon);
 
+    if (!renderer->ring_buffer_) {
+        // No ring buffer, fill silence
+        AudioBuffer* buffer = &ioData->mBuffers[0];
+        std::memset(buffer->mData, 0, buffer->mDataByteSize);
+        return noErr;
+    }
+
     AudioBuffer* buffer = &ioData->mBuffers[0];
     uint8_t* outBuffer = static_cast<uint8_t*>(buffer->mData);
+    size_t bytes_needed = buffer->mDataByteSize;
 
-    size_t bytes_per_frame = renderer->format_.channels * (renderer->format_.bits_per_sample / 8);
-    size_t bytes_needed = inNumberFrames * bytes_per_frame;
-
-    // Quick lock - minimize time in callback
-    size_t to_copy = 0;
-    size_t read_pos = 0;
-    {
-        std::lock_guard<std::mutex> lock(renderer->buffer_mutex_);
-        size_t available = renderer->audio_buffer_.size() - renderer->read_offset_;
-        to_copy = std::min(bytes_needed, available);
-        read_pos = renderer->read_offset_;
-        renderer->read_offset_ += to_copy;
-    }
-
-    // Copy data outside of lock (data won't be modified by writer until we release)
-    if (to_copy > 0) {
-        std::memcpy(outBuffer, renderer->audio_buffer_.data() + read_pos, to_copy);
-    }
+    // Read directly from ring buffer (RingBuffer handles locking internally)
+    size_t bytes_read = renderer->ring_buffer_->Read(outBuffer, bytes_needed);
 
     // Fill remaining with silence
-    if (to_copy < bytes_needed) {
-        std::memset(outBuffer + to_copy, 0, bytes_needed - to_copy);
-    }
-
-    // Periodically trim consumed buffer (not in every callback)
-    static thread_local int call_count = 0;
-    if (++call_count % 100 == 0) {
-        std::lock_guard<std::mutex> lock(renderer->buffer_mutex_);
-        if (renderer->read_offset_ > renderer->audio_buffer_.size() / 2) {
-            // Move remaining data to front
-            size_t remaining = renderer->audio_buffer_.size() - renderer->read_offset_;
-            if (remaining > 0) {
-                std::memmove(renderer->audio_buffer_.data(),
-                            renderer->audio_buffer_.data() + renderer->read_offset_,
-                            remaining);
-            }
-            renderer->audio_buffer_.resize(remaining);
-            renderer->read_offset_ = 0;
-        }
+    if (bytes_read < bytes_needed) {
+        std::memset(outBuffer + bytes_read, 0, bytes_needed - bytes_read);
     }
 
     return noErr;
