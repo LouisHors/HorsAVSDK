@@ -1,5 +1,7 @@
 #include "player_impl.h"
 #include "avsdk/logger.h"
+#include "core/demuxer/ffmpeg_demuxer.h"
+#include "core/demuxer/network_demuxer.h"
 
 #include <chrono>
 #include <thread>
@@ -17,6 +19,30 @@ extern "C" {
 #endif
 
 namespace avsdk {
+
+// Helper to detect URL type
+enum class URLType {
+    LocalFile,
+    HTTP,
+    HTTPS,
+    Unknown
+};
+
+static URLType DetectURLType(const std::string& url) {
+    // Check for http:// or https://
+    if (url.rfind("http://", 0) == 0) {
+        return URLType::HTTP;
+    }
+    if (url.rfind("https://", 0) == 0) {
+        return URLType::HTTPS;
+    }
+    // Check for file://
+    if (url.rfind("file://", 0) == 0) {
+        return URLType::LocalFile;
+    }
+    // If no protocol, assume local file
+    return URLType::LocalFile;
+}
 
 // Helper to create platform audio renderer
 std::unique_ptr<IAudioRenderer> CreatePlatformAudioRenderer() {
@@ -53,7 +79,16 @@ ErrorCode PlayerImpl::SetRenderer(std::shared_ptr<IRenderer> renderer) {
 }
 
 ErrorCode PlayerImpl::Open(const std::string& url) {
-    demuxer_ = CreateFFmpegDemuxer();
+    // Detect URL type and create appropriate demuxer
+    URLType urlType = DetectURLType(url);
+    if (urlType == URLType::HTTP || urlType == URLType::HTTPS) {
+        LOG_INFO("Player", "Detected network URL, using NetworkDemuxer");
+        demuxer_ = CreateNetworkDemuxer();
+    } else {
+        LOG_INFO("Player", "Detected local file URL, using FFmpegDemuxer");
+        demuxer_ = CreateFFmpegDemuxer();
+    }
+
     auto result = demuxer_->Open(url);
     if (result != ErrorCode::OK) {
         return result;
