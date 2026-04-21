@@ -36,6 +36,7 @@ public:
 
 private:
     void DownloadThread();
+    bool WaitForData(size_t min_size, int timeout_ms);
     static int ReadCallback(void* opaque, uint8_t* buf, int buf_size);
     static int64_t SeekCallback(void* opaque, int64_t offset, int whence);
 
@@ -44,14 +45,17 @@ private:
     uint8_t* avio_buffer_ = nullptr;
 
     std::unique_ptr<RingBuffer> ring_buffer_;
+    std::unique_ptr<HttpClient> http_client_;
     std::thread download_thread_;
     std::atomic<bool> should_stop_{false};
     std::atomic<bool> is_buffering_{false};
+    std::atomic<ErrorCode> download_error_{ErrorCode::OK};
 
-    HttpClient http_client_;
     std::string current_url_;
     MediaInfo media_info_;
-    int64_t buffered_duration_ = 0;
+    int64_t content_length_ = -1;
+    int64_t total_downloaded_ = 0;
+    int64_t current_range_start_ = -1;
     int video_stream_index_ = -1;
     int audio_stream_index_ = -1;
 };

@@ -50,6 +50,9 @@ public:
 private:
     class Impl;
     std::unique_ptr<Impl> impl_;
+
+    static int ProgressCallback(void* clientp, int64_t dltotal, int64_t dlnow,
+                                int64_t ultotal, int64_t ulnow);
 };
 
 } // namespace avsdk
