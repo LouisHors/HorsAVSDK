@@ -157,6 +157,141 @@ ErrorCode MetalRenderer::RenderFrame(const AVFrame* frame) {
         return ErrorCode::InvalidParameter;
     }
 
+    // Check if this is a hardware decoded frame (VideoToolbox)
+    if (frame->format == AV_PIX_FMT_VIDEOTOOLBOX) {
+        return RenderHardwareFrame(frame);
+    }
+
+    // Software decoded YUV420P frame
+    return RenderSoftwareFrame(frame);
+}
+
+ErrorCode MetalRenderer::RenderHardwareFrame(const AVFrame* frame) {
+    // Get CVPixelBuffer from hardware decoded frame
+    CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)frame->data[3];
+    if (!pixelBuffer) {
+        LOG_ERROR("MetalRenderer", "No pixel buffer in hardware frame");
+        return ErrorCode::InvalidParameter;
+    }
+
+    // Lock pixel buffer for reading
+    CVReturn cvResult = CVPixelBufferLockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+    if (cvResult != kCVReturnSuccess) {
+        LOG_ERROR("MetalRenderer", "Failed to lock pixel buffer");
+        return ErrorCode::Unknown;
+    }
+
+    id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
+    id<MTLCommandQueue> commandQueue = (__bridge id<MTLCommandQueue>)command_queue_;
+    CAMetalLayer* metalLayer = (__bridge CAMetalLayer*)metal_layer_;
+
+    if (!metalLayer) {
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+        return ErrorCode::InvalidParameter;
+    }
+
+    id<CAMetalDrawable> drawable = [metalLayer nextDrawable];
+    if (!drawable) {
+        CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+        return ErrorCode::OK;
+    }
+
+    // Create textures from CVPixelBuffer using CoreVideo Metal texture cache
+    // For simplicity, we'll use the existing YUV shader but upload from CVPixelBuffer
+    // In production, you'd use a YUV->RGB conversion shader or direct NV12 rendering
+
+    id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
+
+    // Create render pass
+    MTLRenderPassDescriptor* passDesc = [[MTLRenderPassDescriptor alloc] init];
+    passDesc.colorAttachments[0].texture = drawable.texture;
+    passDesc.colorAttachments[0].loadAction = MTLLoadActionClear;
+    passDesc.colorAttachments[0].storeAction = MTLStoreActionStore;
+    passDesc.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1);
+
+    id<MTLRenderCommandEncoder> encoder = [commandBuffer renderCommandEncoderWithDescriptor:passDesc];
+
+    id<MTLRenderPipelineState> pipeline = (__bridge id<MTLRenderPipelineState>)pipeline_state_;
+    [encoder setRenderPipelineState:pipeline];
+
+    id<MTLBuffer> vertexBuffer = (__bridge id<MTLBuffer>)vertex_buffer_;
+    [encoder setVertexBuffer:vertexBuffer offset:0 atIndex:0];
+
+    // For hardware frames, we need to convert from NV12 to YUV420P or use a different shader
+    // Simplified: upload Y and UV planes from CVPixelBuffer
+    OSType pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer);
+
+    if (pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange ||
+        pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange) {
+        // NV12 format: Y plane + UV interleaved plane
+        size_t width = CVPixelBufferGetWidth(pixelBuffer);
+        size_t height = CVPixelBufferGetHeight(pixelBuffer);
+
+        // Get Y plane
+        uint8_t* yBase = (uint8_t*)CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0);
+        size_t yBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0);
+
+        // Get UV plane
+        uint8_t* uvBase = (uint8_t*)CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1);
+        size_t uvBytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1);
+
+        // Create textures
+        MTLTextureDescriptor* yDesc = [[MTLTextureDescriptor alloc] init];
+        yDesc.pixelFormat = MTLPixelFormatR8Unorm;
+        yDesc.width = width;
+        yDesc.height = height;
+        yDesc.usage = MTLTextureUsageShaderRead;
+        id<MTLTexture> yTexture = [device newTextureWithDescriptor:yDesc];
+
+        // For UV plane, we need to handle interleaved UV data
+        // Create a texture and upload UV data
+        MTLTextureDescriptor* uvDesc = [[MTLTextureDescriptor alloc] init];
+        uvDesc.pixelFormat = MTLPixelFormatRG8Unorm;  // RG format for UV
+        uvDesc.width = width / 2;
+        uvDesc.height = height / 2;
+        uvDesc.usage = MTLTextureUsageShaderRead;
+        id<MTLTexture> uvTexture = [device newTextureWithDescriptor:uvDesc];
+
+        // Upload data
+        [yTexture replaceRegion:MTLRegionMake2D(0, 0, width, height)
+                    mipmapLevel:0
+                      withBytes:yBase
+                    bytesPerRow:yBytesPerRow];
+
+        [uvTexture replaceRegion:MTLRegionMake2D(0, 0, width / 2, height / 2)
+                     mipmapLevel:0
+                       withBytes:uvBase
+                     bytesPerRow:uvBytesPerRow];
+
+        // Set textures - use UV texture for both U and V (they're interleaved)
+        [encoder setFragmentTexture:yTexture atIndex:0];
+        [encoder setFragmentTexture:uvTexture atIndex:1];
+        // No separate V texture for NV12
+        [encoder setFragmentTexture:uvTexture atIndex:2];
+    }
+
+    id<MTLBuffer> indexBuffer = (__bridge id<MTLBuffer>)index_buffer_;
+    [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                        indexCount:6
+                         indexType:MTLIndexTypeUInt16
+                       indexBuffer:indexBuffer
+                 indexBufferOffset:0];
+
+    [encoder endEncoding];
+
+    [commandBuffer presentDrawable:drawable];
+    [commandBuffer commit];
+
+    CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
+
+    return ErrorCode::OK;
+}
+
+ErrorCode MetalRenderer::RenderSoftwareFrame(const AVFrame* frame) {
+    if (!frame || !device_ || !command_queue_ || !pipeline_state_) {
+        return ErrorCode::InvalidParameter;
+    }
+
     id<MTLDevice> device = (__bridge id<MTLDevice>)device_;
     id<MTLCommandQueue> commandQueue = (__bridge id<MTLCommandQueue>)command_queue_;
     MTKView* view = (__bridge MTKView*)view_;

@@ -13,6 +13,7 @@ extern "C" {
 // Platform audio renderer factory
 #if defined(__APPLE__)
 #include "platform/macos/audio_unit_renderer.h"
+#include "platform/macos/videotoolbox_decoder.h"
 #endif
 
 namespace avsdk {
@@ -68,12 +69,42 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
 
     // Initialize decoders
     if (media_info_.has_video) {
-        video_decoder_ = CreateFFmpegDecoder();
         AVCodecParameters* codecpar = demuxer_->GetVideoCodecParameters();
-        auto result = video_decoder_->Initialize(codecpar);
-        if (result != ErrorCode::OK) {
-            LOG_ERROR("Player", "Failed to initialize video decoder");
-            return result;
+        if (!codecpar) {
+            LOG_ERROR("Player", "Failed to get video codec parameters");
+            return ErrorCode::CodecNotFound;
+        }
+
+        // Try hardware decoder first if enabled
+        bool hw_decoder_initialized = false;
+        if (config_.enable_hardware_decoder) {
+#if defined(__APPLE__)
+            if (IsHardwareDecoderAvailable(codecpar->codec_id)) {
+                LOG_INFO("Player", "Trying VideoToolbox hardware decoder");
+                video_decoder_ = CreateVideoToolboxDecoder();
+                auto hw_result = video_decoder_->Initialize(codecpar);
+                if (hw_result == ErrorCode::OK) {
+                    LOG_INFO("Player", "VideoToolbox decoder initialized successfully");
+                    hw_decoder_initialized = true;
+                    // Mark that we have a hardware frame for renderer
+                    // The renderer will check frame format to detect this
+                } else {
+                    LOG_WARNING("Player", "VideoToolbox decoder failed, falling back to software");
+                    video_decoder_.reset();
+                }
+            }
+#endif
+        }
+
+        // Fall back to software decoder
+        if (!hw_decoder_initialized) {
+            video_decoder_ = CreateFFmpegDecoder();
+            auto result = video_decoder_->Initialize(codecpar);
+            if (result != ErrorCode::OK) {
+                LOG_ERROR("Player", "Failed to initialize video decoder");
+                return result;
+            }
+            LOG_INFO("Player", "Software decoder initialized");
         }
 
         // Initialize renderer with native window and video dimensions

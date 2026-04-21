@@ -1,5 +1,6 @@
 #pragma once
 #include "avsdk/renderer.h"
+#include <CoreVideo/CoreVideo.h>
 
 namespace avsdk {
 
@@ -13,6 +14,8 @@ public:
     void Release() override;
 
 private:
+    ErrorCode RenderHardwareFrame(const AVFrame* frame);
+    ErrorCode RenderSoftwareFrame(const AVFrame* frame);
     void* device_ = nullptr;
     void* command_queue_ = nullptr;
     void* pipeline_state_ = nullptr;
