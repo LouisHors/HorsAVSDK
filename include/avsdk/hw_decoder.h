@@ -15,6 +15,6 @@ std::unique_ptr<IDecoder> CreateHardwareDecoder(HWDecoderType type);
 std::unique_ptr<IDecoder> CreateVideoToolboxDecoder();
 
 // Check if hardware decoder is available for codec
-bool IsHardwareDecoderAvailable(CodecType codec_type);
+bool IsHardwareDecoderAvailable(AVCodecID codec_id);
 
 } // namespace avsdk

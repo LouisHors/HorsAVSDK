@@ -4,7 +4,9 @@
 #include "avsdk/types.h"
 #include "avsdk/error.h"
 
-struct AVPacket;
+extern "C" {
+#include <libavcodec/avcodec.h>
+}
 
 namespace avsdk {
 
@@ -19,6 +21,9 @@ public:
     virtual AVPacketPtr ReadPacket() = 0;
     virtual ErrorCode Seek(Timestamp position_ms) = 0;
     virtual MediaInfo GetMediaInfo() const = 0;
+    virtual int GetVideoStreamIndex() const = 0;
+    virtual int GetAudioStreamIndex() const = 0;
+    virtual AVCodecParameters* GetVideoCodecParameters() const = 0;
 };
 
 std::unique_ptr<IDemuxer> CreateFFmpegDemuxer();

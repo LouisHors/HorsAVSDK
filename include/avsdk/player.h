@@ -4,6 +4,7 @@
 #include "avsdk/types.h"
 #include "avsdk/error.h"
 #include "avsdk/player_config.h"
+#include "avsdk/renderer.h"
 
 // Forward declaration for DataBypass
 namespace avsdk {
@@ -30,6 +31,10 @@ public:
     virtual MediaInfo GetMediaInfo() const = 0;
     virtual Timestamp GetCurrentPosition() const = 0;
     virtual Timestamp GetDuration() const = 0;
+
+    // Rendering
+    virtual ErrorCode SetRenderer(std::shared_ptr<IRenderer> renderer) = 0;
+    virtual void SetRenderView(void* native_window) = 0;
 
     // Data Bypass methods (Phase 4)
     virtual void SetDataBypassManager(std::shared_ptr<DataBypassManager> manager) = 0;

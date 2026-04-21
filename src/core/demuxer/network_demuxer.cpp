@@ -2,6 +2,10 @@
 #include "avsdk/logger.h"
 #include <cstring>
 
+extern "C" {
+#include <libavformat/avformat.h>
+}
+
 namespace avsdk {
 
 static constexpr size_t kAvioBufferSize = 32768;
@@ -131,6 +135,13 @@ ErrorCode NetworkDemuxer::Seek(Timestamp position_ms) {
 
 MediaInfo NetworkDemuxer::GetMediaInfo() const {
     return media_info_;
+}
+
+AVCodecParameters* NetworkDemuxer::GetVideoCodecParameters() const {
+    if (!format_ctx_ || video_stream_index_ < 0) {
+        return nullptr;
+    }
+    return format_ctx_->streams[video_stream_index_]->codecpar;
 }
 
 void NetworkDemuxer::SetBufferSize(size_t size) {

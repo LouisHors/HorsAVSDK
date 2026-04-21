@@ -2,6 +2,7 @@
 #include "avsdk/player.h"
 #include "avsdk/demuxer.h"
 #include "avsdk/decoder.h"
+#include "avsdk/renderer.h"
 #include "avsdk/data_bypass.h"
 #include <atomic>
 #include <thread>
@@ -27,6 +28,9 @@ public:
     Timestamp GetCurrentPosition() const override;
     Timestamp GetDuration() const override;
 
+    ErrorCode SetRenderer(std::shared_ptr<IRenderer> renderer) override;
+    void SetRenderView(void* native_window) override;
+
     // Data Bypass methods (Phase 4)
     void SetDataBypassManager(std::shared_ptr<DataBypassManager> manager) override;
     std::shared_ptr<DataBypassManager> GetDataBypassManager() override;
@@ -40,10 +44,12 @@ private:
     void PlaybackLoop();
     void DispatchDecodedVideoFrame(const VideoFrame& frame);
     void DispatchDecodedAudioFrame(const AudioFrame& frame);
+    void RenderVideoFrame(const AVFrame* frame);
 
     std::unique_ptr<IDemuxer> demuxer_;
     std::unique_ptr<IDecoder> video_decoder_;
     std::unique_ptr<IDecoder> audio_decoder_;
+    std::shared_ptr<IRenderer> video_renderer_;
 
     std::atomic<PlayerState> state_{PlayerState::kIdle};
     std::thread playback_thread_;
@@ -51,6 +57,7 @@ private:
 
     MediaInfo media_info_;
     PlayerConfig config_;
+    void* native_window_ = nullptr;
 
     // Data Bypass members
     std::shared_ptr<DataBypassManager> dataBypassManager_;

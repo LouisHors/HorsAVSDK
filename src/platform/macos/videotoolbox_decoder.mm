@@ -1,5 +1,8 @@
 #import "videotoolbox_decoder.h"
 #include "avsdk/logger.h"
+extern "C" {
+#include <libavcodec/avcodec.h>
+}
 
 namespace avsdk {
 
@@ -9,30 +12,33 @@ VideoToolboxDecoder::~VideoToolboxDecoder() {
     Close();
 }
 
-ErrorCode VideoToolboxDecoder::Initialize(CodecType codec_type, int width, int height) {
-    codec_type_ = codec_type;
-    width_ = width;
-    height_ = height;
+ErrorCode VideoToolboxDecoder::Initialize(AVCodecParameters* codecpar) {
+    if (!codecpar) {
+        LOG_ERROR("VideoToolboxDecoder", "No codec parameters provided");
+        return ErrorCode::InvalidParameter;
+    }
+
+    width_ = codecpar->width;
+    height_ = codecpar->height;
 
     // Determine codec type
     CMVideoCodecType codec_type_vt;
-    switch (codec_type) {
-        case CodecType::H264:
+    switch (codecpar->codec_id) {
+        case AV_CODEC_ID_H264:
             codec_type_vt = kCMVideoCodecType_H264;
             break;
-        case CodecType::H265:
+        case AV_CODEC_ID_HEVC:
             codec_type_vt = kCMVideoCodecType_HEVC;
             break;
         default:
-            LOG_ERROR("VideoToolboxDecoder", "Unsupported codec");
+            LOG_ERROR("VideoToolboxDecoder", "Unsupported codec_id: " + std::to_string(codecpar->codec_id));
             return ErrorCode::CodecNotFound;
     }
 
-    // For H.264, we can create a basic format description without extradata
     // For HEVC, we would need vps/sps/pps data to create a proper format description
     // This is a simplified initialization - in production, proper codec configuration
     // would be extracted from the stream
-    if (codec_type == CodecType::H265) {
+    if (codecpar->codec_id == AV_CODEC_ID_HEVC) {
         // HEVC requires codec configuration data for format description
         // For now, return OK to pass the test, actual implementation
         // would need stream-specific initialization
@@ -41,7 +47,7 @@ ErrorCode VideoToolboxDecoder::Initialize(CodecType codec_type, int width, int h
     }
 
     // Create format description for H.264
-    OSStatus status = CMVideoFormatDescriptionCreate(nullptr, codec_type_vt, width, height, nullptr, &format_desc_);
+    OSStatus status = CMVideoFormatDescriptionCreate(nullptr, codec_type_vt, width_, height_, nullptr, &format_desc_);
     if (status != noErr) {
         LOG_ERROR("VideoToolboxDecoder", "Failed to create format description: " + std::to_string(status));
         return ErrorCode::CodecOpenFailed;
@@ -62,7 +68,7 @@ ErrorCode VideoToolboxDecoder::Initialize(CodecType codec_type, int width, int h
         return ErrorCode::CodecOpenFailed;
     }
 
-    LOG_INFO("VideoToolboxDecoder", "Initialized " + std::to_string(width) + "x" + std::to_string(height) + " decoder");
+    LOG_INFO("VideoToolboxDecoder", "Initialized " + std::to_string(width_) + "x" + std::to_string(height_) + " decoder");
     return ErrorCode::OK;
 }
 
@@ -116,8 +122,8 @@ std::unique_ptr<IDecoder> CreateVideoToolboxDecoder() {
     return std::make_unique<VideoToolboxDecoder>();
 }
 
-bool IsHardwareDecoderAvailable(CodecType codec_type) {
-    if (codec_type == CodecType::H264 || codec_type == CodecType::H265) {
+bool IsHardwareDecoderAvailable(AVCodecID codec_id) {
+    if (codec_id == AV_CODEC_ID_H264 || codec_id == AV_CODEC_ID_HEVC) {
         return true;
     }
     return false;

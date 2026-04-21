@@ -24,5 +24,6 @@ target_include_directories(avsdk_core PUBLIC
 target_link_libraries(avsdk_core PUBLIC
     avsdk_infrastructure
     avsdk_network
+    avsdk_platform
     ${FFMPEG_LIBRARIES}
 )

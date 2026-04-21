@@ -3,6 +3,10 @@
 #include <cstring>
 #include <sys/stat.h>
 
+extern "C" {
+#include <libavformat/avformat.h>
+}
+
 namespace avsdk {
 
 FFmpegDemuxer::FFmpegDemuxer() = default;
@@ -48,11 +52,14 @@ ErrorCode FFmpegDemuxer::Open(const std::string& url) {
             media_info_.video_width = stream->codecpar->width;
             media_info_.video_height = stream->codecpar->height;
             media_info_.video_framerate = av_q2d(stream->avg_frame_rate);
+            LOG_INFO("Demuxer", "Video stream index: " + std::to_string(i) +
+                     " codec_id: " + std::to_string(stream->codecpar->codec_id));
         } else if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
             audio_stream_index_ = i;
             media_info_.has_audio = true;
             media_info_.audio_sample_rate = stream->codecpar->sample_rate;
             media_info_.audio_channels = stream->codecpar->ch_layout.nb_channels;
+            LOG_INFO("Demuxer", "Audio stream index: " + std::to_string(i));
         }
     }
 
@@ -97,6 +104,13 @@ ErrorCode FFmpegDemuxer::Seek(Timestamp position_ms) {
 
 MediaInfo FFmpegDemuxer::GetMediaInfo() const {
     return media_info_;
+}
+
+AVCodecParameters* FFmpegDemuxer::GetVideoCodecParameters() const {
+    if (!format_ctx_ || video_stream_index_ < 0) {
+        return nullptr;
+    }
+    return format_ctx_->streams[video_stream_index_]->codecpar;
 }
 
 std::unique_ptr<IDemuxer> CreateFFmpegDemuxer() {

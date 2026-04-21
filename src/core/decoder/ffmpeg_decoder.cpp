@@ -9,31 +9,15 @@ FFmpegDecoder::~FFmpegDecoder() {
     Close();
 }
 
-ErrorCode FFmpegDecoder::Initialize(CodecType codec_type, int width, int height) {
-    AVCodecID codec_id;
-    switch (codec_type) {
-        case CodecType::H264:
-            codec_id = AV_CODEC_ID_H264;
-            break;
-        case CodecType::H265:
-            codec_id = AV_CODEC_ID_HEVC;
-            break;
-        case CodecType::VP8:
-            codec_id = AV_CODEC_ID_VP8;
-            break;
-        case CodecType::VP9:
-            codec_id = AV_CODEC_ID_VP9;
-            break;
-        case CodecType::AV1:
-            codec_id = AV_CODEC_ID_AV1;
-            break;
-        default:
-            return ErrorCode::CodecNotFound;
+ErrorCode FFmpegDecoder::Initialize(AVCodecParameters* codecpar) {
+    if (!codecpar) {
+        return ErrorCode::InvalidParameter;
     }
 
-    codec_ = avcodec_find_decoder(codec_id);
+    // Find decoder based on codec_id from stream
+    codec_ = avcodec_find_decoder(codecpar->codec_id);
     if (!codec_) {
-        LOG_ERROR("Decoder", "Codec not found");
+        LOG_ERROR("Decoder", "Codec not found for codec_id: " + std::to_string(codecpar->codec_id));
         return ErrorCode::CodecNotFound;
     }
 
@@ -42,16 +26,26 @@ ErrorCode FFmpegDecoder::Initialize(CodecType codec_type, int width, int height)
         return ErrorCode::OutOfMemory;
     }
 
-    codec_ctx_->width = width;
-    codec_ctx_->height = height;
+    // Copy codec parameters from demuxer
+    int ret = avcodec_parameters_to_context(codec_ctx_, codecpar);
+    if (ret < 0) {
+        LOG_ERROR("Decoder", "Failed to copy codec parameters");
+        avcodec_free_context(&codec_ctx_);
+        return ErrorCode::CodecOpenFailed;
+    }
 
-    int ret = avcodec_open2(codec_ctx_, codec_, nullptr);
+    // Enable multi-threading
+    codec_ctx_->thread_count = 4;
+    codec_ctx_->thread_type = FF_THREAD_FRAME;
+
+    ret = avcodec_open2(codec_ctx_, codec_, nullptr);
     if (ret < 0) {
         LOG_ERROR("Decoder", "Failed to open codec");
         return ErrorCode::CodecOpenFailed;
     }
 
-    LOG_INFO("Decoder", "Initialized decoder: " + std::string(codec_->name));
+    LOG_INFO("Decoder", "Initialized decoder: " + std::string(codec_->name) +
+             " " + std::to_string(codec_ctx_->width) + "x" + std::to_string(codec_ctx_->height));
     return ErrorCode::OK;
 }
 

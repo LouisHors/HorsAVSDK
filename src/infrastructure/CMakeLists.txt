@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 3.14)
 add_library(avsdk_infrastructure STATIC
     logger.cpp
     memory_pool.cpp
+    error.cpp
 )
 
 target_include_directories(avsdk_infrastructure PUBLIC

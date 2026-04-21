@@ -23,9 +23,11 @@ TEST_F(DecoderTest, InitializeWithH264) {
     auto decoder = CreateFFmpegDecoder();
     auto info = demuxer->GetMediaInfo();
 
-    // Need to get codec params from demuxer
-    // For simplicity, test with known H264 params
-    auto result = decoder->Initialize(CodecType::H264, 320, 240);
+    // Get codec parameters from demuxer for proper initialization
+    auto codecpar = demuxer->GetVideoCodecParameters();
+    ASSERT_NE(codecpar, nullptr);
+
+    auto result = decoder->Initialize(codecpar);
     EXPECT_EQ(result, ErrorCode::OK);
 }
 
@@ -34,7 +36,11 @@ TEST_F(DecoderTest, DecodeVideoFrame) {
     demuxer->Open("test_h264.mp4");
 
     auto decoder = CreateFFmpegDecoder();
-    decoder->Initialize(CodecType::H264, 320, 240);
+
+    // Get codec parameters from demuxer for proper initialization
+    auto codecpar = demuxer->GetVideoCodecParameters();
+    ASSERT_NE(codecpar, nullptr);
+    decoder->Initialize(codecpar);
 
     // Read and decode packets - note: without proper extradata
     // from demuxer, frames may not decode successfully

@@ -1,5 +1,6 @@
 #include "player_impl.h"
 #include "avsdk/logger.h"
+
 #include <chrono>
 #include <thread>
 
@@ -19,6 +20,17 @@ ErrorCode PlayerImpl::Initialize(const PlayerConfig& config) {
     return ErrorCode::OK;
 }
 
+void PlayerImpl::SetRenderView(void* native_window) {
+    native_window_ = native_window;
+    LOG_INFO("Player", "Render view set");
+}
+
+ErrorCode PlayerImpl::SetRenderer(std::shared_ptr<IRenderer> renderer) {
+    video_renderer_ = renderer;
+    LOG_INFO("Player", "Renderer set");
+    return ErrorCode::OK;
+}
+
 ErrorCode PlayerImpl::Open(const std::string& url) {
     demuxer_ = CreateFFmpegDemuxer();
     auto result = demuxer_->Open(url);
@@ -31,9 +43,23 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
     // Initialize decoders
     if (media_info_.has_video) {
         video_decoder_ = CreateFFmpegDecoder();
-        video_decoder_->Initialize(CodecType::H264,
-                                    media_info_.video_width,
-                                    media_info_.video_height);
+        AVCodecParameters* codecpar = demuxer_->GetVideoCodecParameters();
+        auto result = video_decoder_->Initialize(codecpar);
+        if (result != ErrorCode::OK) {
+            LOG_ERROR("Player", "Failed to initialize video decoder");
+            return result;
+        }
+
+        // Initialize renderer with native window and video dimensions
+        if (video_renderer_ && native_window_) {
+            result = video_renderer_->Initialize(native_window_,
+                                                  media_info_.video_width,
+                                                  media_info_.video_height);
+            if (result != ErrorCode::OK) {
+                LOG_ERROR("Player", "Failed to initialize video renderer");
+                return result;
+            }
+        }
     }
 
     LOG_INFO("Player", "Opened: " + url);
@@ -48,6 +74,10 @@ void PlayerImpl::Close() {
     }
     video_decoder_.reset();
     audio_decoder_.reset();
+    if (video_renderer_) {
+        video_renderer_->Release();
+        video_renderer_.reset();
+    }
 }
 
 ErrorCode PlayerImpl::Play() {
@@ -133,7 +163,16 @@ void PlayerImpl::DispatchDecodedAudioFrame(const AudioFrame& frame) {
     }
 }
 
+void PlayerImpl::RenderVideoFrame(const AVFrame* frame) {
+    if (video_renderer_ && frame) {
+        video_renderer_->RenderFrame(frame);
+    }
+}
+
 void PlayerImpl::PlaybackLoop() {
+    int videoStreamIndex = demuxer_->GetVideoStreamIndex();
+    LOG_INFO("Player", "Playback loop started, video stream index: " + std::to_string(videoStreamIndex));
+
     while (!should_stop_ && state_ == PlayerState::kPlaying) {
         if (!demuxer_) break;
 
@@ -142,8 +181,34 @@ void PlayerImpl::PlaybackLoop() {
             break; // End of stream
         }
 
-        // Decode and render would happen here
-        // For now, just throttle
+        // Only process video packets
+        if (packet->stream_index == videoStreamIndex) {
+            LOG_INFO("Player", "Processing video packet, pts: " + std::to_string(packet->pts));
+            // Decode video and render
+            if (video_decoder_ && video_renderer_) {
+                auto frame = video_decoder_->Decode(packet);
+                if (frame) {
+                    LOG_INFO("Player", "Decoded frame " + std::to_string(frame->width) + "x" + std::to_string(frame->height));
+                    RenderVideoFrame(frame.get());
+
+                    // Also dispatch for data bypass callbacks
+                    VideoFrame vf;
+                    vf.data[0] = frame->data[0];
+                    vf.data[1] = frame->data[1];
+                    vf.data[2] = frame->data[2];
+                    vf.linesize[0] = frame->linesize[0];
+                    vf.linesize[1] = frame->linesize[1];
+                    vf.linesize[2] = frame->linesize[2];
+                    vf.resolution.width = frame->width;
+                    vf.resolution.height = frame->height;
+                    vf.format = frame->format;
+                    vf.pts = frame->pts;
+                    DispatchDecodedVideoFrame(vf);
+                }
+            }
+        }
+
+        // Simple frame rate control (33ms ~ 30fps)
         std::this_thread::sleep_for(std::chrono::milliseconds(33));
     }
 

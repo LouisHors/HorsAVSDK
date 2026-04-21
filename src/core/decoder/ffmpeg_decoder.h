@@ -1,8 +1,5 @@
 #pragma once
 #include "avsdk/decoder.h"
-extern "C" {
-#include <libavcodec/avcodec.h>
-}
 
 namespace avsdk {
 
@@ -11,7 +8,7 @@ public:
     FFmpegDecoder();
     ~FFmpegDecoder() override;
 
-    ErrorCode Initialize(CodecType codec_type, int width, int height) override;
+    ErrorCode Initialize(AVCodecParameters* codecpar) override;
     AVFramePtr Decode(const AVPacketPtr& packet) override;
     void Flush() override;
     void Close() override;

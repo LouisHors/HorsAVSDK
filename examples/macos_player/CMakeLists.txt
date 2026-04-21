@@ -6,15 +6,27 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fobjc-arc")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fobjc-arc -std=c++14")
 
-# Source files (to be filled in later tasks)
-set(MACOS_PLAYER_SOURCES
-    # Will be populated in subsequent tasks - placeholder for now
-    "${CMAKE_CURRENT_SOURCE_DIR}/placeholder.mm"
+# Set specific flags for Objective-C files
+set_source_files_properties(main.m AppDelegate.m PROPERTIES
+    COMPILE_FLAGS "-fobjc-arc"
+    LANGUAGE C
 )
 
-# Header files (to be filled in later tasks)
+# Source files
+set(MACOS_PLAYER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/main.m"
+    "${CMAKE_CURRENT_SOURCE_DIR}/AppDelegate.m"
+    "${CMAKE_CURRENT_SOURCE_DIR}/PlayerView.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/PlayerWrapper.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/ViewController.mm"
+)
+
+# Header files
 set(MACOS_PLAYER_HEADERS
-    # Will be populated in subsequent tasks
+    "${CMAKE_CURRENT_SOURCE_DIR}/AppDelegate.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/PlayerView.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/PlayerWrapper.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/ViewController.h"
 )
 
 # Create macOS app bundle
@@ -36,6 +48,7 @@ set_target_properties(macos_player PROPERTIES
 # Include directories
 target_include_directories(macos_player PRIVATE
     ${CMAKE_SOURCE_DIR}/include/avsdk
+    ${CMAKE_SOURCE_DIR}/src/platform/macos
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -78,4 +91,6 @@ endif()
 # Set output name
 set_target_properties(macos_player PROPERTIES
     OUTPUT_NAME "HorsAVPlayer"
+    XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
+    XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
 )

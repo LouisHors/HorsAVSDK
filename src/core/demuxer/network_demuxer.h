@@ -21,6 +21,9 @@ public:
     AVPacketPtr ReadPacket() override;
     ErrorCode Seek(Timestamp position_ms) override;
     MediaInfo GetMediaInfo() const override;
+    int GetVideoStreamIndex() const override { return video_stream_index_; }
+    int GetAudioStreamIndex() const override { return audio_stream_index_; }
+    AVCodecParameters* GetVideoCodecParameters() const override;
 
     // Network specific
     void SetBufferSize(size_t size);
@@ -45,6 +48,8 @@ private:
     std::string current_url_;
     MediaInfo media_info_;
     int64_t buffered_duration_ = 0;
+    int video_stream_index_ = -1;
+    int audio_stream_index_ = -1;
 };
 
 std::unique_ptr<IDemuxer> CreateNetworkDemuxer();

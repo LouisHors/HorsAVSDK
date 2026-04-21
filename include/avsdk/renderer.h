@@ -15,4 +15,7 @@ public:
     virtual void Release() = 0;
 };
 
+// Factory function for platform-specific renderers
+std::unique_ptr<IRenderer> CreatePlatformRenderer();
+
 } // namespace avsdk

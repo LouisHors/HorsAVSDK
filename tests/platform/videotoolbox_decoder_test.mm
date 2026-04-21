@@ -2,6 +2,10 @@
 #include "platform/macos/videotoolbox_decoder.h"
 #include "avsdk/error.h"
 
+extern "C" {
+#include <libavcodec/avcodec.h>
+}
+
 using namespace avsdk;
 
 TEST(VideoToolboxDecoderTest, CreateInstance) {
@@ -12,13 +16,29 @@ TEST(VideoToolboxDecoderTest, CreateInstance) {
 TEST(VideoToolboxDecoderTest, InitializeWithH264) {
     auto decoder = CreateVideoToolboxDecoder();
 
-    auto result = decoder->Initialize(CodecType::H264, 1920, 1080);
+    // Create mock codec parameters for H264
+    AVCodecParameters* codecpar = avcodec_parameters_alloc();
+    codecpar->codec_id = AV_CODEC_ID_H264;
+    codecpar->width = 1920;
+    codecpar->height = 1080;
+
+    auto result = decoder->Initialize(codecpar);
     EXPECT_EQ(result, ErrorCode::OK);
+
+    avcodec_parameters_free(&codecpar);
 }
 
 TEST(VideoToolboxDecoderTest, InitializeWithH265) {
     auto decoder = CreateVideoToolboxDecoder();
 
-    auto result = decoder->Initialize(CodecType::H265, 1920, 1080);
+    // Create mock codec parameters for HEVC
+    AVCodecParameters* codecpar = avcodec_parameters_alloc();
+    codecpar->codec_id = AV_CODEC_ID_HEVC;
+    codecpar->width = 1920;
+    codecpar->height = 1080;
+
+    auto result = decoder->Initialize(codecpar);
     EXPECT_EQ(result, ErrorCode::OK);
+
+    avcodec_parameters_free(&codecpar);
 }

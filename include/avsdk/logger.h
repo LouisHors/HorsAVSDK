@@ -33,5 +33,6 @@ private:
 
 #define LOG_INFO(tag, msg) Logger::GetInstance().Log(LogLevel::kInfo, tag, msg)
 #define LOG_ERROR(tag, msg) Logger::GetInstance().Log(LogLevel::kError, tag, msg)
+#define LOG_WARNING(tag, msg) Logger::GetInstance().Log(LogLevel::kWarning, tag, msg)
 
 } // namespace avsdk

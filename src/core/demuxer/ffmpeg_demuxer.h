@@ -1,5 +1,6 @@
 #pragma once
 #include "avsdk/demuxer.h"
+
 extern "C" {
 #include <libavformat/avformat.h>
 }
@@ -16,6 +17,9 @@ public:
     AVPacketPtr ReadPacket() override;
     ErrorCode Seek(Timestamp position_ms) override;
     MediaInfo GetMediaInfo() const override;
+    int GetVideoStreamIndex() const override { return video_stream_index_; }
+    int GetAudioStreamIndex() const override { return audio_stream_index_; }
+    AVCodecParameters* GetVideoCodecParameters() const override;
 
 private:
     AVFormatContext* format_ctx_ = nullptr;
