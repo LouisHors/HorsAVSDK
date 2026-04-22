@@ -4,6 +4,7 @@
 #include "avsdk/types.h"
 #include "avsdk/error.h"
 #include "avsdk/player_config.h"
+#include "avsdk/player_callback.h"
 #include "avsdk/renderer.h"
 
 // Forward declaration for DataBypass
@@ -35,6 +36,9 @@ public:
     // Rendering
     virtual ErrorCode SetRenderer(std::shared_ptr<IRenderer> renderer) = 0;
     virtual void SetRenderView(void* native_window) = 0;
+
+    // Callback registration
+    virtual void SetCallback(IPlayerCallback* callback) = 0;
 
     // Data Bypass methods (Phase 4)
     virtual void SetDataBypassManager(std::shared_ptr<DataBypassManager> manager) = 0;

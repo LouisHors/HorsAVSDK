@@ -41,6 +41,9 @@ public:
     ErrorCode SetRenderer(std::shared_ptr<IRenderer> renderer) override;
     void SetRenderView(void* native_window) override;
 
+    // Callback registration
+    void SetCallback(IPlayerCallback* callback) override;
+
     // Data Bypass methods (Phase 4)
     void SetDataBypassManager(std::shared_ptr<DataBypassManager> manager) override;
     std::shared_ptr<DataBypassManager> GetDataBypassManager() override;
@@ -55,6 +58,14 @@ private:
     void DispatchDecodedVideoFrame(const VideoFrame& frame);
     void DispatchDecodedAudioFrame(const AudioFrame& frame);
     void RenderVideoFrame(const AVFrame* frame);
+
+    void NotifyStateChanged(PlayerState oldState, PlayerState newState);
+    void NotifyError(ErrorCode error, const std::string& message);
+    void NotifyPrepared();
+    void NotifyComplete();
+    void NotifyProgress(Timestamp position, Timestamp duration);
+    void NotifySeekComplete(Timestamp position);
+    void NotifyBuffering(bool isBuffering, int percent);
 
     std::unique_ptr<IDemuxer> demuxer_;
     std::unique_ptr<IDecoder> video_decoder_;
@@ -88,6 +99,10 @@ private:
 
     // Audio clock for AV sync
     AudioClock audio_clock_;
+
+    // Callback
+    IPlayerCallback* callback_ = nullptr;
+    std::mutex callback_mutex_;
 
     // Video frame queue for sync
     struct VideoFrameItem {

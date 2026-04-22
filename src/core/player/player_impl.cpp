@@ -62,8 +62,9 @@ PlayerImpl::~PlayerImpl() {
 
 ErrorCode PlayerImpl::Initialize(const PlayerConfig& config) {
     config_ = config;
-    state_ = PlayerState::kStopped;
+    auto oldState = state_.exchange(PlayerState::kStopped);
     LOG_INFO("Player", "Initialized");
+    NotifyStateChanged(oldState, PlayerState::kStopped);
     return ErrorCode::OK;
 }
 
@@ -78,8 +79,61 @@ ErrorCode PlayerImpl::SetRenderer(std::shared_ptr<IRenderer> renderer) {
     return ErrorCode::OK;
 }
 
+void PlayerImpl::SetCallback(IPlayerCallback* callback) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    callback_ = callback;
+}
+
+void PlayerImpl::NotifyStateChanged(PlayerState oldState, PlayerState newState) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (callback_) {
+        callback_->OnStateChanged(oldState, newState);
+    }
+}
+
+void PlayerImpl::NotifyError(ErrorCode error, const std::string& message) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (callback_) {
+        callback_->OnError(error, message);
+    }
+}
+
+void PlayerImpl::NotifyPrepared() {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (callback_) {
+        callback_->OnPrepared(media_info_);
+    }
+}
+
+void PlayerImpl::NotifyComplete() {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (callback_) {
+        callback_->OnComplete();
+    }
+}
+
+void PlayerImpl::NotifyProgress(Timestamp position, Timestamp duration) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (callback_) {
+        callback_->OnProgress(position, duration);
+    }
+}
+
+void PlayerImpl::NotifySeekComplete(Timestamp position) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (callback_) {
+        callback_->OnSeekComplete(position);
+    }
+}
+
+void PlayerImpl::NotifyBuffering(bool isBuffering, int percent) {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    if (callback_) {
+        callback_->OnBuffering(isBuffering, percent);
+    }
+}
+
 ErrorCode PlayerImpl::Open(const std::string& url) {
-    // Detect URL type and create appropriate demuxer
     URLType urlType = DetectURLType(url);
     if (urlType == URLType::HTTP || urlType == URLType::HTTPS) {
         LOG_INFO("Player", "Detected network URL, using NetworkDemuxer");
@@ -91,6 +145,7 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
 
     auto result = demuxer_->Open(url);
     if (result != ErrorCode::OK) {
+        NotifyError(result, "Failed to open URL: " + url);
         return result;
     }
 
@@ -217,6 +272,7 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
     }
 
     LOG_INFO("Player", "Opened: " + url);
+    NotifyPrepared();
     return ErrorCode::OK;
 }
 
@@ -256,22 +312,24 @@ ErrorCode PlayerImpl::Play() {
         return ErrorCode::OK;
     }
 
-    state_ = PlayerState::kPlaying;
+    auto oldState = state_.exchange(PlayerState::kPlaying);
     should_stop_ = false;
     playback_thread_ = std::thread(&PlayerImpl::PlaybackLoop, this);
 
     LOG_INFO("Player", "Started playback");
+    NotifyStateChanged(oldState, PlayerState::kPlaying);
     return ErrorCode::OK;
 }
 
 ErrorCode PlayerImpl::Pause() {
-    state_ = PlayerState::kPaused;
+    auto oldState = state_.exchange(PlayerState::kPaused);
     LOG_INFO("Player", "Paused");
+    NotifyStateChanged(oldState, PlayerState::kPaused);
     return ErrorCode::OK;
 }
 
 ErrorCode PlayerImpl::Stop() {
-    state_ = PlayerState::kStopped;
+    auto oldState = state_.exchange(PlayerState::kStopped);
     should_stop_ = true;
 
     if (playback_thread_.joinable()) {
@@ -279,12 +337,20 @@ ErrorCode PlayerImpl::Stop() {
     }
 
     LOG_INFO("Player", "Stopped");
+    NotifyStateChanged(oldState, PlayerState::kStopped);
     return ErrorCode::OK;
 }
 
 ErrorCode PlayerImpl::Seek(Timestamp position_ms) {
     if (!demuxer_) return ErrorCode::NotInitialized;
-    return demuxer_->Seek(position_ms);
+    auto result = demuxer_->Seek(position_ms);
+    if (result == ErrorCode::OK) {
+        // Reset audio clock after seek
+        audio_clock_.Reset();
+        audio_clock_.UpdateByPTS(position_ms / 1000.0);
+        NotifySeekComplete(position_ms);
+    }
+    return result;
 }
 
 void PlayerImpl::SetDataBypassManager(std::shared_ptr<DataBypassManager> manager) {
@@ -351,6 +417,10 @@ void PlayerImpl::PlaybackLoop() {
     int audio_packets_decoded = 0;
     int64_t total_audio_samples = 0;
 
+    // Progress tracking
+    Timestamp last_progress_report = 0;
+    const Timestamp progress_interval_ms = 500; // Report every 500ms
+
     // Start audio clock
     audio_clock_.Reset();
 
@@ -359,7 +429,15 @@ void PlayerImpl::PlaybackLoop() {
 
         auto packet = demuxer_->ReadPacket();
         if (!packet) {
-            break; // End of stream
+            NotifyComplete(); // End of stream reached
+            break;
+        }
+
+        // Report progress periodically
+        Timestamp current_pos = GetCurrentPosition();
+        if (current_pos - last_progress_report >= progress_interval_ms) {
+            NotifyProgress(current_pos, media_info_.duration_ms);
+            last_progress_report = current_pos;
         }
 
         // Process video packets
@@ -514,8 +592,9 @@ void PlayerImpl::PlaybackLoop() {
     // Stop audio clock
     audio_clock_.Stop();
 
-    if (state_ == PlayerState::kPlaying) {
-        state_ = PlayerState::kStopped;
+    auto oldState = state_.exchange(PlayerState::kStopped);
+    if (oldState != PlayerState::kStopped) {
+        NotifyStateChanged(oldState, PlayerState::kStopped);
     }
 }
 
