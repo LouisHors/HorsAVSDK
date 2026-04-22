@@ -1,28 +1,8 @@
 #import "PlayerWrapper.h"
+#import "HorsAVSDK.h"
 
-// C++ Headers
-#include "player.h"
-#include "player_config.h"
-#include "error.h"
-#include "renderer.h"
-#include "types.h"
-#include "metal_renderer.h"
-
-#import <Metal/Metal.h>
-#import <MetalKit/MetalKit.h>
-#include <memory>
-#include <string>
-
-using namespace avsdk;
-
-@interface PlayerWrapper () {
-    std::shared_ptr<IPlayer> _player;
-    std::unique_ptr<IRenderer> _renderer;
-    DemoPlayerState _state;
-    NSTimeInterval _currentTime;
-    NSTimeInterval _duration;
-    CGSize _videoSize;
-}
+@interface PlayerWrapper () <HorsAVPlayerDelegate>
+@property (nonatomic, strong) HorsAVPlayer *player;
 @end
 
 @implementation PlayerWrapper
@@ -47,156 +27,174 @@ using namespace avsdk;
 #pragma mark - Lifecycle
 
 - (BOOL)initializePlayer {
-    if (_player) {
-        return YES; // Already initialized
+    if (self.player) {
+        return YES;
     }
 
-    _player = CreatePlayer();
-    if (!_player) {
-        [self reportErrorWithCode:ErrorCode::Unknown message:@"Failed to create player"];
+    // Configure
+    HorsAVPlayerConfiguration *config = [HorsAVPlayerConfiguration defaultConfiguration];
+    config.enableHardwareDecoder = self.enableHardwareDecoder;
+
+    switch (self.decoderMode) {
+        case DecoderModeAuto:
+            config.decoderMode = HorsAVDecoderModeAuto;
+            break;
+        case DecoderModeSoftware:
+            config.decoderMode = HorsAVDecoderModeSoftware;
+            break;
+        case DecoderModeHardware:
+            config.decoderMode = HorsAVDecoderModeHardware;
+            break;
+        case DecoderModeHardwareFirst:
+            config.decoderMode = HorsAVDecoderModeHardwareFirst;
+            break;
+    }
+
+    NSError *error;
+    self.player = [[HorsAVPlayer alloc] initWithConfiguration:config error:&error];
+
+    if (!self.player) {
+        [self reportError:error];
         return NO;
     }
 
-    // Configure player
-    PlayerConfig config;
-    config.enable_hardware_decoder = _enableHardwareDecoder;
-    config.buffer_time_ms = 1000; // 1 second buffer
-
-    ErrorCode result = _player->Initialize(config);
-    if (result != ErrorCode::OK) {
-        [self reportErrorWithCode:result message:@"Failed to initialize player"];
-        _player.reset();
-        return NO;
-    }
-
-    _state = DemoPlayerStateIdle;
+    self.player.delegate = self;
+    self.state = DemoPlayerStateReady;
     return YES;
 }
 
 - (void)releasePlayer {
-    if (_player) {
-        _player->Stop();
-        _player->Close();
-        _player.reset();
-    }
-
-    if (_renderer) {
-        _renderer->Release();
-        _renderer.reset();
-    }
-
-    _state = DemoPlayerStateIdle;
-    _currentTime = 0;
-    _duration = 0;
-    _videoSize = CGSizeZero;
+    self.player = nil;
+    self.state = DemoPlayerStateIdle;
 }
 
 #pragma mark - Playback Control
 
 - (BOOL)openFile:(NSString *)filePath {
-    if (!_player) {
+    if (!self.player) {
         if (![self initializePlayer]) {
             return NO;
         }
     }
 
-    std::string url = [filePath UTF8String];
-    ErrorCode result = _player->Open(url);
+    NSURL *url = [NSURL fileURLWithPath:filePath];
+    NSError *error;
 
-    if (result != ErrorCode::OK) {
-        [self reportErrorWithCode:result
-                          message:[NSString stringWithFormat:@"Failed to open file: %@", filePath]];
-        _state = DemoPlayerStateError;
+    if (![self.player openURL:url error:&error]) {
+        [self reportError:error];
+        self.state = DemoPlayerStateError;
         [self notifyStateChanged];
         return NO;
     }
-
-    // Get media info
-    MediaInfo info = _player->GetMediaInfo();
-    _duration = info.duration_ms / 1000.0;
-    _videoSize = CGSizeMake(info.video_width, info.video_height);
-
-    _state = DemoPlayerStateReady;
-    [self notifyStateChanged];
 
     return YES;
 }
 
 - (void)play {
-    if (!_player) return;
+    if (!self.player) return;
 
-    ErrorCode result = _player->Play();
-    if (result == ErrorCode::OK) {
-        _state = DemoPlayerStatePlaying;
-        [self notifyStateChanged];
-        [self startProgressTimer];
-    } else {
-        [self reportErrorWithCode:result message:@"Failed to play"];
-    }
+    [self.player play];
+    // State will be updated via delegate
 }
 
 - (void)pause {
-    if (!_player) return;
+    if (!self.player) return;
 
-    ErrorCode result = _player->Pause();
-    if (result == ErrorCode::OK) {
-        _state = DemoPlayerStatePaused;
-        [self notifyStateChanged];
-    }
+    [self.player pause];
+    // State will be updated via delegate
 }
 
 - (void)stop {
-    if (!_player) return;
+    if (!self.player) return;
 
-    _player->Stop();
-    _state = DemoPlayerStateReady;
+    [self.player stop];
     _currentTime = 0;
-    [self notifyStateChanged];
+    // State will be updated via delegate
 }
 
 - (void)seekTo:(NSTimeInterval)time {
-    if (!_player) return;
+    if (!self.player) return;
 
-    // Convert seconds to milliseconds
-    int64_t positionMs = static_cast<int64_t>(time * 1000);
-    ErrorCode result = _player->Seek(positionMs);
-
-    if (result != ErrorCode::OK) {
-        [self reportErrorWithCode:result message:@"Failed to seek"];
-    } else {
-        _currentTime = time;
-        [self notifyProgressUpdate];
-    }
+    [self.player seekToTime:time completionHandler:^(BOOL success, NSTimeInterval actualTime, NSError *error) {
+        if (!success && error) {
+            [self reportError:error];
+        }
+    }];
 }
 
 #pragma mark - Rendering
 
 - (void)setRenderView:(MTKView *)view {
-    if (!_player) {
-        [self reportErrorWithCode:ErrorCode::NotInitialized message:@"Player not initialized"];
-        return;
+    if (!self.player) {
+        if (![self initializePlayer]) {
+            return;
+        }
     }
 
-    // Create Metal renderer
-    _renderer = CreateMetalRenderer();
-    if (!_renderer) {
-        [self reportErrorWithCode:ErrorCode::HardwareNotAvailable message:@"Failed to create Metal renderer"];
-        return;
+    [self.player setRenderView:view];
+}
+
+#pragma mark - HorsAVPlayerDelegate
+
+- (void)player:(HorsAVPlayer *)player didPrepareMedia:(HorsAVMediaInfo *)info {
+    self.duration = info.duration;
+    self.videoSize = CGSizeMake(info.videoWidth, info.videoHeight);
+    self.state = DemoPlayerStateReady;
+    [self notifyStateChanged];
+}
+
+- (void)player:(HorsAVPlayer *)player didChangeState:(HorsAVPlayerState)oldState toState:(HorsAVPlayerState)newState {
+    self.state = [self convertState:newState];
+    [self notifyStateChanged];
+}
+
+- (void)player:(HorsAVPlayer *)player didEncounterError:(NSError *)error {
+    self.state = DemoPlayerStateError;
+    [self reportError:error];
+    [self notifyStateChanged];
+}
+
+- (void)playerDidCompletePlayback:(HorsAVPlayer *)player {
+    self.state = DemoPlayerStateReady;
+    self.currentTime = 0;
+    [self notifyStateChanged];
+}
+
+- (void)player:(HorsAVPlayer *)player didUpdateProgress:(NSTimeInterval)currentTime duration:(NSTimeInterval)duration {
+    self.currentTime = currentTime;
+    if (duration > 0) {
+        self.duration = duration;
     }
+    [self notifyProgressUpdate];
+}
 
-    // Initialize renderer with native window
-    void* nativeWindow = (__bridge void*)view;
-
-    // Set render view in player (renderer will be initialized when Open is called)
-    _player->SetRenderView(nativeWindow);
-
-    // Store renderer reference in player with custom deleter (PlayerWrapper owns it)
-    _player->SetRenderer(std::shared_ptr<IRenderer>(_renderer.get(), [](IRenderer*) {
-        // Custom deleter - do nothing since _renderer is owned by PlayerWrapper
-    }));
+- (void)player:(HorsAVPlayer *)player didChangeBuffering:(BOOL)isBuffering percent:(NSInteger)percent {
+    if (isBuffering) {
+        self.state = DemoPlayerStateBuffering;
+    } else {
+        self.state = [self convertState:player.state];
+    }
+    [self notifyStateChanged];
 }
 
 #pragma mark - Private Methods
+
+- (DemoPlayerState)convertState:(HorsAVPlayerState)state {
+    switch (state) {
+        case HorsAVPlayerStateIdle:
+            return DemoPlayerStateIdle;
+        case HorsAVPlayerStateStopped:
+            return DemoPlayerStateReady;
+        case HorsAVPlayerStatePlaying:
+            return DemoPlayerStatePlaying;
+        case HorsAVPlayerStatePaused:
+            return DemoPlayerStatePaused;
+        case HorsAVPlayerStateError:
+            return DemoPlayerStateError;
+        default:
+            return DemoPlayerStateIdle;
+    }
+}
 
 - (void)notifyStateChanged {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -214,87 +212,12 @@ using namespace avsdk;
     });
 }
 
-- (void)reportErrorWithCode:(ErrorCode)code message:(NSString *)message {
-    NSString *errorString = [NSString stringWithUTF8String:GetErrorString(code)];
-    NSString *fullMessage = [NSString stringWithFormat:@"%@: %@", errorString, message];
-
-    NSError *error = [NSError errorWithDomain:@"HorsAVPlayer"
-                                         code:static_cast<NSInteger>(code)
-                                     userInfo:@{NSLocalizedDescriptionKey: fullMessage}];
-
+- (void)reportError:(NSError *)error {
     dispatch_async(dispatch_get_main_queue(), ^{
         if ([self.delegate respondsToSelector:@selector(playerWrapper:didEncounterError:)]) {
             [self.delegate playerWrapper:self didEncounterError:error];
         }
     });
-}
-
-- (void)startProgressTimer {
-    // Progress updates will be triggered by the player callbacks
-    // For now, poll the current position
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        while (self.state == DemoPlayerStatePlaying) {
-            if (self->_player) {
-                self->_currentTime = self->_player->GetCurrentPosition() / 1000.0;
-                [self notifyProgressUpdate];
-            }
-            [NSThread sleepForTimeInterval:0.5];
-        }
-    });
-}
-
-#pragma mark - Property Accessors
-
-- (DemoPlayerState)state {
-    if (_player) {
-        DemoPlayerState cppState = [self convertCPPState:_player->GetState()];
-        // Only update if valid state transition
-        if (cppState != DemoPlayerStateError || _state == DemoPlayerStateError) {
-            return cppState;
-        }
-    }
-    return _state;
-}
-
-- (NSTimeInterval)currentTime {
-    if (_player) {
-        return _player->GetCurrentPosition() / 1000.0;
-    }
-    return _currentTime;
-}
-
-- (NSTimeInterval)duration {
-    if (_player) {
-        return _player->GetDuration() / 1000.0;
-    }
-    return _duration;
-}
-
-- (CGSize)videoSize {
-    if (_player) {
-        MediaInfo info = _player->GetMediaInfo();
-        return CGSizeMake(info.video_width, info.video_height);
-    }
-    return _videoSize;
-}
-
-#pragma mark - State Conversion
-
-- (DemoPlayerState)convertCPPState:(avsdk::PlayerState)cppState {
-    switch (cppState) {
-        case avsdk::PlayerState::kIdle:
-            return DemoPlayerStateIdle;
-        case avsdk::PlayerState::kStopped:
-            return DemoPlayerStateReady;
-        case avsdk::PlayerState::kPlaying:
-            return DemoPlayerStatePlaying;
-        case avsdk::PlayerState::kPaused:
-            return DemoPlayerStatePaused;
-        case avsdk::PlayerState::kError:
-            return DemoPlayerStateError;
-        default:
-            return DemoPlayerStateIdle;
-    }
 }
 
 @end

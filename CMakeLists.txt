@@ -34,3 +34,8 @@ add_subdirectory(tests)
 
 # Examples
 add_subdirectory(examples)
+
+# Objective-C bindings (macOS/iOS only)
+if(APPLE)
+    add_subdirectory(bindings/objc)
+endif()

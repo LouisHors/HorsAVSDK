@@ -1,0 +1,8 @@
+module HorsAVSDK {
+    umbrella header "HorsAVSDK.h"
+
+    export *
+
+    // Require C++ standard library for internal implementation
+    requires cplusplus
+}
