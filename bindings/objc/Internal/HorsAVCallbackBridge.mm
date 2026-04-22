@@ -1,5 +1,6 @@
 #import "HorsAVCallbackBridge.h"
 #import "HorsAVPlayer.h"
+#import "HorsAVPlayerInternal.h"
 #import "HorsAVTypes.h"
 #import "HorsAVError.h"
 

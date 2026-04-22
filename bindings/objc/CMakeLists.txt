@@ -17,39 +17,39 @@ find_library(COREGRAPHICS_LIBRARY CoreGraphics)
 
 # Collect Objective-C binding source files
 set(HORSAV_OBJC_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVSDK.mm
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVPlayer.mm
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVPlayerConfig.mm
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVTypes.mm
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVError.mm
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVDataBypass.mm
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVRenderer.mm
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVLogger.mm
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/Internal/HorsAVCallbackBridge.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVSDK.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVPlayer.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVPlayerConfig.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVTypes.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVError.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVDataBypass.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVRenderer.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVLogger.mm
+    ${CMAKE_CURRENT_SOURCE_DIR}/Internal/HorsAVCallbackBridge.mm
 )
 
 # Collect headers
 set(HORSAV_OBJC_HEADERS
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVSDK.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVPlayer.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVPlayerConfig.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVTypes.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVError.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVDataBypass.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVRenderer.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVLogger.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/Internal/HorsAVPlayerInternal.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/Internal/HorsAVCallbackBridge.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVSDK.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVPlayer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVPlayerConfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVTypes.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVError.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVDataBypass.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVRenderer.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/HorsAVLogger.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Internal/HorsAVPlayerInternal.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/Internal/HorsAVCallbackBridge.h
 )
 
 # Create Objective-C library
 add_library(avsdk_objc STATIC ${HORSAV_OBJC_SOURCES} ${HORSAV_OBJC_HEADERS})
 
 target_include_directories(avsdk_objc PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc
-    ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/Internal
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/Internal
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
 )
 
 target_link_libraries(avsdk_objc
@@ -78,14 +78,14 @@ if(PLATFORM STREQUAL "macOS")
         MACOSX_FRAMEWORK_IDENTIFIER com.horsav.sdk
         MACOSX_FRAMEWORK_BUNDLE_VERSION "1.0.0"
         MACOSX_FRAMEWORK_SHORT_VERSION_STRING "1.0.0"
-        PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVSDK.h;${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVPlayer.h;${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVPlayerConfig.h;${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVTypes.h;${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVError.h;${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVDataBypass.h;${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVRenderer.h;${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc/HorsAVLogger.h"
+        PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/HorsAVSDK.h;${CMAKE_CURRENT_SOURCE_DIR}/HorsAVPlayer.h;${CMAKE_CURRENT_SOURCE_DIR}/HorsAVPlayerConfig.h;${CMAKE_CURRENT_SOURCE_DIR}/HorsAVTypes.h;${CMAKE_CURRENT_SOURCE_DIR}/HorsAVError.h;${CMAKE_CURRENT_SOURCE_DIR}/HorsAVDataBypass.h;${CMAKE_CURRENT_SOURCE_DIR}/HorsAVRenderer.h;${CMAKE_CURRENT_SOURCE_DIR}/HorsAVLogger.h"
         COMPILE_FLAGS "-fobjc-arc -std=c++14"
     )
 
     target_include_directories(HorsAVSDK PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/bindings/objc
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
     )
 
     target_link_libraries(HorsAVSDK

@@ -312,6 +312,11 @@ ErrorCode PlayerImpl::Play() {
         return ErrorCode::OK;
     }
 
+    // Ensure any previous thread is properly cleaned up before starting a new one
+    if (playback_thread_.joinable()) {
+        playback_thread_.join();
+    }
+
     auto oldState = state_.exchange(PlayerState::kPlaying);
     should_stop_ = false;
     playback_thread_ = std::thread(&PlayerImpl::PlaybackLoop, this);
@@ -416,10 +421,16 @@ void PlayerImpl::PlaybackLoop() {
     bool audio_prebuffered = false;
     int audio_packets_decoded = 0;
     int64_t total_audio_samples = 0;
+    int total_packets_read = 0;  // DEBUG
 
     // Progress tracking
     Timestamp last_progress_report = 0;
     const Timestamp progress_interval_ms = 500; // Report every 500ms
+
+    // Buffer flow control - maintain 2-5 seconds of buffered audio
+    const int kMinBufferMs = 1000;   // Minimum: 1 second (need to read more)
+    const int kMaxBufferMs = 5000;   // Maximum: 5 seconds (pause reading)
+    const int kTargetBufferMs = 3000; // Target: 3 seconds
 
     // Start audio clock
     audio_clock_.Reset();
@@ -427,9 +438,45 @@ void PlayerImpl::PlaybackLoop() {
     while (!should_stop_ && state_ == PlayerState::kPlaying) {
         if (!demuxer_) break;
 
+        // Flow control: Check audio buffer level before reading next packet
+        // This implements the "circular buffer read/write" strategy
+        if (audio_renderer_ && audio_prebuffered && audioStreamIndex >= 0) {
+            int buffered_ms = audio_renderer_->GetBufferedDuration();
+
+            if (buffered_ms > kMaxBufferMs) {
+                // Buffer is full - wait for consumer to drain
+                LOG_INFO("Player", "Buffer full (" + std::to_string(buffered_ms) +
+                         "ms), pausing read to let playback consume...");
+                int wait_count = 0;
+                while (wait_count < 100 && !should_stop_) {  // Max 1 second wait
+                    buffered_ms = audio_renderer_->GetBufferedDuration();
+                    if (buffered_ms <= kTargetBufferMs) {
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    wait_count++;
+                }
+            }
+        }
+
         auto packet = demuxer_->ReadPacket();
+        total_packets_read++;  // DEBUG
         if (!packet) {
-            NotifyComplete(); // End of stream reached
+            LOG_INFO("Player", "Total packets read: " + std::to_string(total_packets_read));  // DEBUG
+            // End of stream reached - wait for audio buffer to drain
+            if (audio_renderer_ && audioStreamIndex >= 0) {
+                LOG_INFO("Player", "End of stream, waiting for audio buffer to drain...");
+                int wait_count = 0;
+                while (wait_count < 2000 && !should_stop_) {  // Max wait 20 seconds for long audio
+                    int buffered_ms = audio_renderer_->GetBufferedDuration();
+                    if (buffered_ms <= 200) {  // Less than 200ms remaining
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                    wait_count++;
+                }
+            }
+            NotifyComplete();
             break;
         }
 
@@ -500,6 +547,9 @@ void PlayerImpl::PlaybackLoop() {
 
                     // Check if resampling is needed
                     AVSampleFormat srcFormat = static_cast<AVSampleFormat>(frame->format);
+                    LOG_INFO("Player", "Audio frame format: " + std::to_string(srcFormat) +
+                             ", channels: " + std::to_string(frame->ch_layout.nb_channels) +
+                             ", samples: " + std::to_string(frame->nb_samples));
                     if (srcFormat != AV_SAMPLE_FMT_S16 && swr_context_) {
                         // Calculate output samples
                         int out_samples = av_rescale_rnd(swr_get_delay(swr_context_, frame->sample_rate) + frame->nb_samples,
@@ -518,7 +568,7 @@ void PlayerImpl::PlaybackLoop() {
                                                             const_cast<const uint8_t**>(frame->data), frame->nb_samples);
                         if (converted_samples > 0) {
                             int data_size = converted_samples * out_channels * sizeof(int16_t);
-                            audio_renderer_->WriteAudio(audio_resample_buffer_.data(), data_size);
+                            int written = audio_renderer_->WriteAudio(audio_resample_buffer_.data(), data_size);
 
                             // Update audio clock
                             if (audio_prebuffered) {
@@ -531,6 +581,12 @@ void PlayerImpl::PlaybackLoop() {
                                 audio_packets_decoded++;
                                 total_audio_samples += converted_samples;
                             }
+                        } else if (converted_samples < 0) {
+                            char errbuf[256];
+                            av_strerror(converted_samples, errbuf, sizeof(errbuf));
+                            LOG_ERROR("Player", "swr_convert failed: " + std::string(errbuf));
+                        } else {
+                            LOG_WARNING("Player", "swr_convert returned 0 samples");
                         }
                     } else if (srcFormat == AV_SAMPLE_FMT_S16) {
                         // Already S16, write directly
@@ -538,7 +594,7 @@ void PlayerImpl::PlaybackLoop() {
                                                                     frame->nb_samples,
                                                                     static_cast<AVSampleFormat>(frame->format), 1);
                         if (data_size > 0) {
-                            audio_renderer_->WriteAudio(frame->data[0], data_size);
+                            int written = audio_renderer_->WriteAudio(frame->data[0], data_size);
 
                             // Update audio clock
                             if (audio_prebuffered) {
@@ -574,13 +630,21 @@ void PlayerImpl::PlaybackLoop() {
 
         // Start audio playback after pre-buffering some data
         if (!audio_prebuffered && audio_renderer_ && audio_packets_decoded >= 40) {  // ~1 second of audio
+            // Wait until we have at least 1 second of buffered audio before starting
+            int buffered_ms = audio_renderer_->GetBufferedDuration();
+            if (buffered_ms < 1000) {
+                // Not enough data yet, continue buffering
+                continue;
+            }
+
             // Initialize audio clock with first audio PTS
             audio_clock_.UpdateByPTS(0.0);  // Start from 0
             audio_clock_.Start();
             audio_renderer_->Play();
             audio_prebuffered = true;
             LOG_INFO("Player", "Audio playback started after pre-buffering " +
-                     std::to_string(audio_packets_decoded) + " packets, samples: " + std::to_string(total_audio_samples));
+                     std::to_string(audio_packets_decoded) + " packets, samples: " + std::to_string(total_audio_samples) +
+                     ", buffered: " + std::to_string(buffered_ms) + "ms");
         }
     }
 

@@ -1,5 +1,6 @@
 #import "PlayerWrapper.h"
-#import "HorsAVSDK.h"
+#import "HorsAVPlayer.h"
+#import "HorsAVPlayerConfig.h"
 
 @interface PlayerWrapper () <HorsAVPlayerDelegate>
 @property (nonatomic, strong) HorsAVPlayer *player;
@@ -77,6 +78,7 @@
         }
     }
 
+    // Use file path directly instead of URL to avoid encoding issues with Chinese characters
     NSURL *url = [NSURL fileURLWithPath:filePath];
     NSError *error;
 

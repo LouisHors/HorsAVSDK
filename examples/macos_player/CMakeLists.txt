@@ -49,6 +49,7 @@ set_target_properties(macos_player PROPERTIES
 target_include_directories(macos_player PRIVATE
     ${CMAKE_SOURCE_DIR}/include/avsdk
     ${CMAKE_SOURCE_DIR}/src/platform/macos
+    ${CMAKE_SOURCE_DIR}/bindings/objc
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -59,6 +60,7 @@ link_directories(${CMAKE_BINARY_DIR}/src)
 target_link_libraries(macos_player PRIVATE
     avsdk_core
     avsdk_platform
+    avsdk_objc
 )
 
 # Link macOS frameworks
@@ -94,3 +96,12 @@ set_target_properties(macos_player PROPERTIES
     XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
     XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
 )
+
+# Copy test MP3 file to app bundle Resources
+set(TEST_MP3_FILE "${CMAKE_CURRENT_SOURCE_DIR}/周杰伦-白色风车.mp3")
+if(EXISTS ${TEST_MP3_FILE})
+    set_source_files_properties(${TEST_MP3_FILE} PROPERTIES
+        MACOSX_PACKAGE_LOCATION Resources
+    )
+    target_sources(macos_player PRIVATE ${TEST_MP3_FILE})
+endif()

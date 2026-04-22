@@ -34,11 +34,11 @@ typedef NS_ENUM(NSInteger, DecoderMode) {
 // Delegate
 @property (nonatomic, weak, nullable) id<PlayerWrapperDelegate> delegate;
 
-// Readonly properties
-@property (nonatomic, readonly) DemoPlayerState state;
-@property (nonatomic, readonly) NSTimeInterval currentTime;
-@property (nonatomic, readonly) NSTimeInterval duration;
-@property (nonatomic, readonly) CGSize videoSize;
+// Properties (readwrite internally)
+@property (nonatomic, readwrite) DemoPlayerState state;
+@property (nonatomic, readwrite) NSTimeInterval currentTime;
+@property (nonatomic, readwrite) NSTimeInterval duration;
+@property (nonatomic, readwrite) CGSize videoSize;
 
 // Config properties
 @property (nonatomic, assign) DecoderMode decoderMode;

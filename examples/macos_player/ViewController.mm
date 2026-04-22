@@ -166,6 +166,23 @@
     // Initialize player and set render view
     [self.player initializePlayer];
     [self.player setRenderView:self.playerView.mtkView];
+
+    // Auto-load test file
+    [self autoLoadTestFile];
+}
+
+- (void)autoLoadTestFile {
+    // Get the path to the test file in bundle
+    NSString *testFilePath = [[NSBundle mainBundle] pathForResource:@"周杰伦-白色风车" ofType:@"mp3"];
+
+    NSLog(@"[Demo] Looking for test file in bundle...");
+
+    if (testFilePath) {
+        NSLog(@"[Demo] Found test file at: %@", testFilePath);
+        [self loadFile:testFilePath];
+    } else {
+        NSLog(@"[Demo] Test file not found in bundle");
+    }
 }
 
 #pragma mark - Actions

@@ -7,6 +7,9 @@
 
 namespace avsdk {
 
+// Definition for the constexpr static member
+constexpr size_t AudioUnitRenderer::kBufferCapacity;
+
 AudioUnitRenderer::AudioUnitRenderer() = default;
 
 AudioUnitRenderer::~AudioUnitRenderer() {
@@ -69,8 +72,8 @@ ErrorCode AudioUnitRenderer::Initialize(const AudioFormat& format) {
         return ErrorCode::HardwareNotAvailable;
     }
 
-    // Create ring buffer
-    ring_buffer_ = std::make_unique<RingBuffer>(256 * 1024);
+    // Create ring buffer with larger capacity for smooth playback (~11 seconds at 44.1kHz stereo)
+    ring_buffer_ = std::make_unique<RingBuffer>(kBufferCapacity);
 
     LOG_INFO("AudioUnit", "Initialized " + std::to_string(format.sample_rate) + "Hz audio with ring buffer");
     return ErrorCode::OK;

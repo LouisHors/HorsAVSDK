@@ -116,7 +116,14 @@ using namespace avsdk;
         return NO;
     }
 
-    std::string urlString = std::string([url.absoluteString UTF8String]);
+    // For file URLs, use path property which handles percent-decoding correctly
+    std::string urlString;
+    if (url.isFileURL) {
+        urlString = std::string([url.path UTF8String]);
+    } else {
+        urlString = std::string([url.absoluteString UTF8String]);
+    }
+
     ErrorCode result = _cppPlayer->Open(urlString);
 
     if (result != ErrorCode::OK) {
@@ -184,8 +191,7 @@ using namespace avsdk;
         if (completionHandler) {
             completionHandler(NO, 0, [NSError errorWithDomain:HorsAVErrorDomain
                                                          code:HorsAVErrorCodeNotInitialized
-                                                     userInfo:@{NSLocalizedDescriptionKey: @"Player not initialized"}])
-);
+                                                     userInfo:@{NSLocalizedDescriptionKey: @"Player not initialized"}]);
         }
         return;
     }
@@ -267,6 +273,10 @@ using namespace avsdk;
 
 - (instancetype)init {
     return nil; // Use factory methods
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+    return self; // Immutable, return self
 }
 
 @end

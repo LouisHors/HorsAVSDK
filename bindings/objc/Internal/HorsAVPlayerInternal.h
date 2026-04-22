@@ -32,6 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Initialize with existing C++ player (for testing)
 - (instancetype)initWithCPPPlayer:(std::shared_ptr<avsdk::IPlayer>)player;
 
+// Internal write access to readonly properties
+@property (nonatomic, readwrite) NSTimeInterval currentTime;
+@property (nonatomic, readwrite, getter=isBuffering) BOOL buffering;
+@property (nonatomic, readwrite) NSInteger bufferingPercent;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -86,6 +86,9 @@ AVPacketPtr FFmpegDemuxer::ReadPacket() {
     int ret = av_read_frame(format_ctx_, packet);
 
     if (ret < 0) {
+        char errbuf[256];
+        av_strerror(ret, errbuf, sizeof(errbuf));
+        LOG_ERROR("Demuxer", "av_read_frame failed: " + std::string(errbuf) + " (" + std::to_string(ret) + ")");
         av_packet_free(&packet);
         return nullptr;
     }

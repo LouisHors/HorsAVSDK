@@ -443,7 +443,7 @@ class DataBypassManager {
 public:
     void RegisterBypass(std::shared_ptr<IDataBypass> bypass);
     void UnregisterBypass(std::shared_ptr<IDataBypass> bypass);
-    
+
     // 分发数据到所有注册的旁路
     void DispatchAudioFrame(const AudioFrame& frame, BypassStage stage);
     void DispatchVideoFrame(const VideoFrame& frame, BypassStage stage);
@@ -753,10 +753,10 @@ struct EncodedFrame {
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 1.0 | 2024-04-22 | 初始版本，定义音频/视频播放和采集管线 |
+| 1.0 | 2026-04-22 | 初始版本，定义音频/视频播放和采集管线 |
 
 ---
 
-**文档状态**: Draft  
-**维护者**: HorsAVSDK Team  
-**最后更新**: 2024-04-22
+**文档状态**: Draft
+**维护者**: HorsAVSDK Team
+**最后更新**: 2026-04-22
