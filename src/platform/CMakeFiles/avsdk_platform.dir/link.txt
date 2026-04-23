@@ -1,2 +1,0 @@
-/usr/bin/ar qc libavsdk_platform.a CMakeFiles/avsdk_platform.dir/macos/metal_renderer.mm.o CMakeFiles/avsdk_platform.dir/macos/videotoolbox_decoder.mm.o CMakeFiles/avsdk_platform.dir/macos/audio_unit_renderer.mm.o
-/usr/bin/ranlib libavsdk_platform.a
