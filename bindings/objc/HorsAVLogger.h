@@ -18,7 +18,7 @@ typedef NS_ENUM(NSInteger, HorsAVLogLevel) {
     HorsAVLogLevelWarning = 3,
     HorsAVLogLevelError   = 4,
     HorsAVLogLevelOff     = 5
-} NS_SWIFT_NAME(LogLevel);
+};
 
 /**
  * Logger class for HorsAVSDK

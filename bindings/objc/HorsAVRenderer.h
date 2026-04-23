@@ -43,13 +43,13 @@ NS_SWIFT_NAME(PlayerRenderer)
  * Custom overlay layer. Set to nil to remove.
  * The overlay is rendered on top of the video.
  */
-@property (nonatomic, readwrite, nullable) CALayer *overlayLayer;
+@property (nonatomic, readwrite, strong, nullable) CALayer *overlayLayer;
 
 /**
  * Background color (shown when video doesn't fill the view)
  * Default is black.
  */
-@property (nonatomic, readwrite, strong) NSColor *backgroundColor;
+@property (nonatomic, readwrite, strong, nullable) NSColor *backgroundColor;
 
 /**
  * Current video size in pixels

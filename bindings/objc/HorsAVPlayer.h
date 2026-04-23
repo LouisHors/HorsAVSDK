@@ -136,7 +136,7 @@ NS_SWIFT_NAME(Player)
  * Set the Metal view for video rendering
  * @param view MTKView to render video to
  */
-- (void)setRenderView:(MTKView *)view NS_SWIFT_NAME(setRenderView(_:));
+- (void)setRenderView:(nullable MTKView *)view NS_SWIFT_NAME(setRenderView(_:));
 
 /**
  * Set the render mode
@@ -150,7 +150,7 @@ NS_SWIFT_NAME(Player)
  * Configure data bypass
  * @param configuration Data bypass configuration
  */
-- (void)setDataBypassConfiguration:(HorsAVDataBypassConfiguration *)configuration
+- (void)setDataBypassConfiguration:(nullable HorsAVDataBypassConfiguration *)configuration
     NS_SWIFT_NAME(setDataBypassConfiguration(_:));
 
 /**

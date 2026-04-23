@@ -35,7 +35,7 @@ typedef NS_ENUM(NSInteger, HorsAVPlayerState) {
      * Player encountered an error
      */
     HorsAVPlayerStateError    = 4
-} NS_SWIFT_NAME(PlayerState);
+};
 
 // MARK: - Decoder Mode
 
@@ -60,7 +60,7 @@ typedef NS_ENUM(NSInteger, HorsAVDecoderMode) {
      * Try hardware first, fallback to software
      */
     HorsAVDecoderModeHardwareFirst = 3
-} NS_SWIFT_NAME(DecoderMode);
+};
 
 // MARK: - Media Info
 
@@ -149,7 +149,7 @@ typedef NS_ENUM(NSInteger, HorsAVDataBypassStage) {
      * Data before final rendering
      */
     HorsAVDataBypassStageRendered  = 3
-} NS_SWIFT_NAME(DataBypassStage);
+};
 
 /**
  * Data type for bypass
@@ -158,7 +158,7 @@ NS_SWIFT_NAME(DataType)
 typedef NS_ENUM(NSInteger, HorsAVDataType) {
     HorsAVDataTypeVideo = 0,
     HorsAVDataTypeAudio = 1
-} NS_SWIFT_NAME(DataType);
+};
 
 // MARK: - Render Mode
 
@@ -179,7 +179,7 @@ typedef NS_ENUM(NSInteger, HorsAVRenderMode) {
      * Fill the view, cropping if necessary
      */
     HorsAVRenderModeFillCrop = 2
-} NS_SWIFT_NAME(RenderMode);
+};
 
 // MARK: - Video Frame
 
