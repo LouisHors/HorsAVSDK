@@ -17,105 +17,70 @@ HorsAVSDK is a **cross-platform audio/video SDK** based on FFmpeg, providing pla
 
 ---
 
-## Quick Links
+## Documentation Index
 
-### Documentation
+### Getting Started
 | Document | Description |
 |----------|-------------|
 | [`docs/context/sdk_architecture_current.md`](docs/context/sdk_architecture_current.md) | Current SDK architecture (READ FIRST) |
 | [`docs/context/sdk_interface_design.md`](docs/context/sdk_interface_design.md) | C++ interface specifications |
 | [`docs/context/objc_interface_spec.md`](docs/context/objc_interface_spec.md) | Objective-C/Swift bindings |
+| [`docs/guides/quick_start.md`](docs/guides/quick_start.md) | Quick start guide *(create)* |
+
+### Architecture & Design
+| Document | Description |
+|----------|-------------|
+| [`docs/context/architecture_overview.md`](docs/context/architecture_overview.md) | Architecture overview, key modules & thread model *(create)* |
+| [`docs/context/architecture_patterns.md`](docs/context/architecture_patterns.md) | Design patterns: platform abstraction, factories, memory management *(create)* |
 | [`docs/context/player_impl_design.md`](docs/context/player_impl_design.md) | Player implementation details |
 | [`docs/context/metal_rendering_strategy.md`](docs/context/metal_rendering_strategy.md) | macOS Metal rendering |
-| [`docs/context/git_constraints.md`](docs/context/git_constraints.md) | Git workflow & commit conventions |
+
+### Development
+| Document | Description |
+|----------|-------------|
+| [`docs/context/development_guidelines.md`](docs/context/development_guidelines.md) | Code style, patterns & best practices *(create)* |
+| [`docs/context/git_constraints.md`](docs/context/git_constraints.md) | Git workflow, branch naming & commit conventions |
+| [`docs/guides/build_guide.md`](docs/guides/build_guide.md) | Build & test instructions *(create)* |
+| [`docs/guides/contributing.md`](docs/guides/contributing.md) | Contribution guidelines *(create)* |
+
+### Reference
+| Document | Description |
+|----------|-------------|
+| [`docs/reference/error_codes.md`](docs/reference/error_codes.md) | Error code reference *(create)* |
+| [`docs/reference/performance_targets.md`](docs/reference/performance_targets.md) | Performance benchmarks & targets *(create)* |
+| [`docs/reference/security_guidelines.md`](docs/reference/security_guidelines.md) | Security best practices *(create)* |
+| [`docs/reference/api_index.md`](docs/reference/api_index.md) | API index *(create)* |
 
 ### Product Requirements
-- [`docs/context/跨平台音视频SDK_PRD.md`](docs/context/跨平台音视频SDK_PRD.md) - Product requirements
-- [`docs/context/media_sdk_architecture_design.md`](docs/context/media_sdk_architecture_design.md) - Initial architecture
-- [`docs/context/ffmpeg_sdk_technical_solution.md`](docs/context/ffmpeg_sdk_technical_solution.md) - FFmpeg technical solution
+| Document | Description |
+|----------|-------------|
+| [`docs/context/跨平台音视频SDK_PRD.md`](docs/context/跨平台音视频SDK_PRD.md) | Product requirements |
+| [`docs/context/media_sdk_architecture_design.md`](docs/context/media_sdk_architecture_design.md) | Initial architecture design |
+| [`docs/context/ffmpeg_sdk_technical_solution.md`](docs/context/ffmpeg_sdk_technical_solution.md) | FFmpeg technical solution |
 
 ---
 
-## Architecture
+## Quick Reference
 
-```
-Application Layer (iOS/Android/macOS/Windows)
-         ↓
-Platform Adapter Layer (Metal/OpenGL ES/DirectX/VideoToolbox/MediaCodec)
-         ↓
-Core Layer (C++) - Demuxer, Decoder, Encoder, Muxer, Renderer, Clock
-         ↓
-FFmpeg Layer (libavcodec, libavformat, libswscale)
-         ↓
-Infrastructure Layer (ThreadPool, MemoryPool, Logger)
-```
-
-### Key Modules
-1. **Demuxer**: Media format parsing
-2. **Decoder**: Video/audio decoding with HW acceleration fallback
-3. **Encoder**: Real-time H264/H265 encoding
-4. **Renderer**: Platform-specific video rendering
-5. **Clock**: Audio-video synchronization
-
-### Thread Model
-- **Main Thread**: UI interaction and SDK API calls
-- **Demuxer Thread**: Reads and parses media data
-- **Video Decode Thread**: Decodes video packets
-- **Audio Decode Thread**: Decodes and resamples audio
-- **Render Thread**: Video rendering with vsync
-- **Audio Play Thread**: Audio output and synchronization
-- **Clock Thread**: AV sync management
-
----
-
-## Development Guidelines
-
-### Before Starting
-1. Read [`docs/context/sdk_architecture_current.md`](docs/context/sdk_architecture_current.md)
-2. Read relevant interface specs (C++ or Objective-C)
-3. Check existing implementation docs for your area
-
-### Code Style
-- **C++**: Google Style Guide, 4 spaces, 120 char limit, `snake_case_` for members
-- **Objective-C**: Apple Cocoa Guidelines, `AVSDK` prefix
-- **Swift**: Swift API Design Guidelines
-- **Java/Kotlin**: Android Kotlin Style Guide
-
-See detailed conventions: [`docs/context/code_style_guide.md`](docs/context/code_style_guide.md) *(create if needed)*
-
-### Architecture Patterns
-- Platform abstraction via interfaces (`IRenderer`, `IDecoder`)
-- Factory pattern for hardware decoders
-- Smart pointers with custom deleters for FFmpeg objects
-- Memory pool for performance-critical paths
-- Observer pattern for callbacks
-
-See [`docs/context/architecture_patterns.md`](docs/context/architecture_patterns.md) *(create if needed)*
-
----
-
-## Git Workflow
-
-
-⚠️ **main 分支受保护，禁止直接推送**。所有变更必须通过 PR 流程。
-
-快速开始：
+### Common Commands
 ```bash
+# Build
+mkdir -p build/macos && cd build/macos
+cmake ../.. -DCMAKE_BUILD_TYPE=Release
+make -j$(sysctl -n hw.ncpu)
+
+# Test
+cd build/macos
+ctest --output-on-failure
+
+# Git workflow
 git checkout -b feature/my-feature
 git commit -m "feat(player): add new feature"
 git push -u origin feature/my-feature
 gh pr create --title "feat: add new feature" --body "Description"
 ```
 
-详细规范：
-- **分支保护规则**: `docs/context/git_constraints.md`
-- **提交规范**: 遵循 [Conventional Commits](https://www.conventionalcommits.org/)
-
----
-
-## Build & Test
-
-### Requirements
+### Platform Requirements
 | Platform | Minimum | Build Tools |
 |----------|---------|-------------|
 | iOS | iOS 12.0+ | Xcode 12+, Metal |
@@ -123,49 +88,34 @@ gh pr create --title "feat: add new feature" --body "Description"
 | macOS | 10.14+ | Xcode 12+, Metal |
 | Windows | Windows 10 1803+ | VS 2019+, DirectX 11 |
 
-### Build
-```bash
-mkdir -p build/macos && cd build/macos
-cmake ../.. -DCMAKE_BUILD_TYPE=Release
-make -j$(sysctl -n hw.ncpu)
+---
+
+## Repository Structure
+
+```
+.
+├── include/avsdk/          # Public C++ headers
+├── src/
+│   ├── core/               # Core implementation
+│   ├── platform/           # Platform adapters
+│   ├── infrastructure/     # Utilities
+│   └── ffmpeg/             # FFmpeg integration
+├── bindings/               # Language bindings
+│   ├── objc/               # Objective-C/Swift
+│   ├── java/               # Java/JNI
+│   └── csharp/             # C#
+├── tests/                  # Test suites
+├── examples/               # Demo applications
+└── docs/                   # Documentation
+    ├── context/            # Architecture & design docs
+    ├── guides/             # How-to guides
+    └── reference/          # API & reference docs
 ```
 
-### Test
-```bash
-cd build/macos
-ctest --output-on-failure
-```
-
 ---
 
-## Performance Targets
+## Quick Links
 
-| Metric | Target |
-|--------|--------|
-| First frame (local) | ≤ 500ms |
-| First frame (network) | ≤ 2s |
-| 1080p@30fps CPU | < 30% (iPhone 12) |
-| Live latency | ≤ 3s |
-| AV sync deviation | ≤ 40ms |
-| Memory growth | ≤ 100MB |
-
----
-
-## Error Codes
-
-- `0xxx`: General errors
-- `1xxx`: Player errors
-- `2xxx`: Codec errors
-- `3xxx`: Network errors
-- `4xxx`: File errors
-- `5xxx`: Hardware errors
-
----
-
-## Security
-
-- Never log sensitive URLs
-- Validate external URLs before FFmpeg
-- Sanitize file paths
-- Use HTTPS for streams
-- Handle untrusted media carefully
+- **GitHub**: https://github.com/LouisHors/HorsAVSDK
+- **Issues**: https://github.com/LouisHors/HorsAVSDK/issues
+- **Pull Requests**: https://github.com/LouisHors/HorsAVSDK/pulls
