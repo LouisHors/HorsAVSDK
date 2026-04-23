@@ -96,8 +96,10 @@ See [`docs/context/architecture_patterns.md`](docs/context/architecture_patterns
 
 ## Git Workflow
 
-⚠️ **main branch is protected**. All changes must go through PR.
 
+⚠️ **main 分支受保护，禁止直接推送**。所有变更必须通过 PR 流程。
+
+快速开始：
 ```bash
 git checkout -b feature/my-feature
 git commit -m "feat(player): add new feature"
@@ -105,11 +107,9 @@ git push -u origin feature/my-feature
 gh pr create --title "feat: add new feature" --body "Description"
 ```
 
-**Branch naming**: `feature/description`, `bugfix/description`, `hotfix/description`, `platform/feature`
-
-**Commit format**: [Conventional Commits](https://www.conventionalcommits.org/) - `type(scope): description`
-
-Full rules: [`docs/context/git_constraints.md`](docs/context/git_constraints.md)
+详细规范：
+- **分支保护规则**: `docs/context/git_constraints.md`
+- **提交规范**: 遵循 [Conventional Commits](https://www.conventionalcommits.org/)
 
 ---
 
