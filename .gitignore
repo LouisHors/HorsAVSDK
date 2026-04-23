@@ -1,0 +1,59 @@
+# Build directories
+build/
+build_*/
+cmake-build-*/
+out/
+
+# IDE
+.idea/
+.vscode/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Compiled files
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+Makefile
+
+# Testing
+Testing/
+
+# macOS
+.DS_Store
+*.dSYM/
+
+# FFmpeg
+ffmpeg/
+ffmpeg-*/
+
+# Dependencies
+third_party/
+vendor/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Package files
+*.tar.gz
+*.zip
+
+# Documentation build
+docs/_build/
+docs/_site/
