@@ -479,18 +479,69 @@ Build FFmpeg with:
 
 ## Git Workflow
 
-- **Branch naming**: 
-  - Features: `feature/phase1-local-playback`
-  - Bug fixes: `bugfix/decoder-memory-leak`
-  - Hot fixes: `hotfix/ios-crash`
-  - Platform specific: `feature/ios/metal-renderer`
-- **Commit messages**: Use conventional commits format
-  - `feat: add VideoToolbox hardware decoder`
-  - `fix: resolve memory leak in FFmpegDemuxer`
-  - `docs: update API documentation`
-  - `perf: optimize zero-copy path for iOS`
-- **Pull requests**: Require review before merge
-- **Version tagging**: Follow semantic versioning (e.g., `v1.0.0`)
+### Branch Protection (Enforced)
+
+⚠️ **IMPORTANT**: `main` 分支受保护，**禁止直接推送**。
+
+所有代码变更必须通过 Pull Request 流程：
+
+```bash
+# 1. 创建功能分支
+git checkout -b feature/my-feature
+
+# 2. 开发并提交（遵循 conventional commits）
+git commit -m "feat(player): add new feature"
+
+# 3. 推送并创建 PR
+git push -u origin feature/my-feature
+gh pr create --title "feat: add new feature" --body "Description"
+
+# 4. 等待审查通过（至少 1 个 approval）
+# 5. 合并到 main
+```
+
+### Branch Naming
+
+| 类型 | 格式 | 示例 |
+|------|------|------|
+| 功能开发 | `feature/<description>` | `feature/phase1-local-playback` |
+| Bug 修复 | `bugfix/<description>` | `bugfix/decoder-memory-leak` |
+| 紧急修复 | `hotfix/<description>` | `hotfix/ios-crash` |
+| 平台特定 | `feature/<platform>/<feature>` | `feature/ios/metal-renderer` |
+| 文档更新 | `docs/<description>` | `docs/api-reference` |
+| 重构 | `refactor/<description>` | `refactor/player-state-machine` |
+
+### Commit Message Format
+
+遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范：
+
+```
+<type>(<scope>): <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+**类型**: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`
+
+**示例**:
+- `feat: add VideoToolbox hardware decoder`
+- `fix(audio): resolve buffer underrun issue`
+- `docs(api): update Objective-C interface spec`
+- `perf(rendering): optimize zero-copy path for iOS`
+
+### Git Hooks (本地保护)
+
+仓库配置了以下 Git hooks：
+
+- **pre-commit**: 代码格式检查、阻止 .DS_Store、大文件检测
+- **commit-msg**: 提交信息格式验证
+- **pre-push**: 阻止直接推送到 main 分支
+
+### 完整规范
+
+详见: [`docs/context/git_constraints.md`](docs/context/git_constraints.md)
 
 ---
 
