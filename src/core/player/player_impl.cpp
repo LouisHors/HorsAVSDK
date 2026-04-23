@@ -671,7 +671,8 @@ MediaInfo PlayerImpl::GetMediaInfo() const {
 }
 
 Timestamp PlayerImpl::GetCurrentPosition() const {
-    return 0; // TODO: Implement proper position tracking
+    // Use audio clock for position tracking (audio is master clock)
+    return static_cast<Timestamp>(audio_clock_.GetTimeMs());
 }
 
 Timestamp PlayerImpl::GetDuration() const {

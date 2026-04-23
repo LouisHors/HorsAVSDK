@@ -2,7 +2,6 @@
 #import <AVFoundation/AVFoundation.h>
 
 @interface ViewController ()
-@property (strong) NSTimer *progressTimer;
 @property (assign) BOOL isPlaying;
 @end
 
@@ -19,9 +18,6 @@
 
 - (void)viewWillDisappear {
     [super viewWillDisappear];
-
-    [self.progressTimer invalidate];
-    self.progressTimer = nil;
 
     [self.player releasePlayer];
     self.player = nil;
@@ -224,8 +220,8 @@
         // Start playing
         [self.player play];
 
-        // Start progress timer
-        [self startProgressTimer];
+        // Progress updates now come from SDK callback (playerWrapper:didUpdateProgress:duration:)
+        // No need to start a timer
     } else {
         NSAlert *alert = [[NSAlert alloc] init];
         [alert setMessageText:@"Error"];
@@ -254,8 +250,7 @@
     self.progressSlider.doubleValue = 0;
     [self updateTimeLabelWithPosition:0 duration:0];
 
-    [self.progressTimer invalidate];
-    self.progressTimer = nil;
+    // Timer no longer needed - progress comes from SDK callback
 }
 
 - (void)sliderChanged:(id)sender {
@@ -274,36 +269,7 @@
     }
 }
 
-#pragma mark - Progress Timer
-
-- (void)startProgressTimer {
-    [self.progressTimer invalidate];
-    self.progressTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
-                                                          target:self
-                                                        selector:@selector(updateProgress)
-                                                        userInfo:nil
-                                                         repeats:YES];
-}
-
-- (void)updateProgress {
-    if (!self.player) return;
-
-    NSTimeInterval position = [self.player currentTime];
-    NSTimeInterval duration = [self.player duration];
-
-    if (duration > 0) {
-        double progress = position / duration;
-        self.progressSlider.doubleValue = progress;
-        [self updateTimeLabelWithPosition:position duration:duration];
-
-        // Add audio buffer info to time label
-        // Get buffered duration from player if available
-        NSString *positionStr = [self formatTime:position];
-        NSString *durationStr = [self formatTime:duration];
-        [self.timeLabel setStringValue:[NSString stringWithFormat:@"%@ / %@ (%.0f%%)",
-                                        positionStr, durationStr, progress * 100]];
-    }
-}
+#pragma mark - Progress Updates
 
 - (NSString *)formatTime:(double)seconds {
     int totalSeconds = (int)seconds;
@@ -377,7 +343,14 @@
 }
 
 - (void)playerWrapper:(PlayerWrapper *)wrapper didUpdateProgress:(NSTimeInterval)currentTime duration:(NSTimeInterval)duration {
-    // Handled by timer
+    // Update UI with progress from SDK callback
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (duration > 0) {
+            double progress = currentTime / duration;
+            self.progressSlider.doubleValue = progress;
+            [self updateTimeLabelWithPosition:currentTime duration:duration];
+        }
+    });
 }
 
 - (void)playerWrapper:(PlayerWrapper *)wrapper didEncounterError:(NSError *)error {
