@@ -14,6 +14,7 @@ HorsAVSDK is a **cross-platform audio/video SDK** based on FFmpeg, providing pla
   - Video playback: FFmpeg decoding + Metal rendering ✅
   - Audio playback: FFmpeg decoding + AudioUnit rendering ✅
   - Basic AV sync ✅
+  - Objective-C/Swift bindings ✅
 - Phase 2: Network streaming (RTMP, HLS, FLV over HTTP)
 - Phase 3: Real-time encoding and capture
 - Phase 4: Data bypass callbacks for all pipeline stages
@@ -382,6 +383,7 @@ All project documentation, design decisions, and task tracking are stored in the
 - `docs/context/sdk_interface_design.md` - SDK 接口设计规范
 - `docs/context/player_impl_design.md` - PlayerImpl 实现详解
 - `docs/context/metal_rendering_strategy.md` - macOS Metal 渲染策略
+- `docs/objc_interface_spec.md` - Objective-C/Swift 接口规范（已实现 ✅）
 
 #### 开发前必读
 1. **新功能开发**: 先阅读 `sdk_architecture_current.md` 了解当前结构
@@ -409,7 +411,8 @@ All project documentation, design decisions, and task tracking are stored in the
    - 了解当前限制和已知问题
 
 2. **阅读接口设计**:
-   - 阅读 `docs/context/sdk_interface_design.md` 了解公共接口规范
+   - 阅读 `docs/context/sdk_interface_design.md` 了解 C++ 公共接口规范
+   - 阅读 `docs/objc_interface_spec.md` 了解 Objective-C/Swift 接口规范
    - 确保新功能与现有接口兼容
 
 3. **阅读相关实现**:

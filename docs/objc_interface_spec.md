@@ -836,6 +836,6 @@ bindings/objc/
 
 ---
 
-**文档状态**: Draft  
+**文档状态**: ✅ Implemented  
 **维护者**: HorsAVSDK Team  
-**最后更新**: 2024-04-22
+**最后更新**: 2026-04-23
