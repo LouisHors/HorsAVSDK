@@ -12,8 +12,12 @@ out/
 *.xcworkspace/xcuserdata/
 DerivedData/
 
+# Xcode app bundles
+*.app/
+
 # Compiled files
 *.o
+*.o.d
 *.a
 *.so
 *.dylib
@@ -26,9 +30,36 @@ CMakeFiles/
 CTestTestfile.cmake
 cmake_install.cmake
 Makefile
+compile_commands.json
+
+# Source build artifacts (when built in-tree)
+src/**/CMakeFiles/
+src/**/Makefile
+src/**/cmake_install.cmake
 
 # Testing
 Testing/
+
+# Test directories (binaries and media)
+tests/bin/
+tests/media/
+tests/**/CMakeFiles/
+tests/**/Makefile
+tests/**/cmake_install.cmake
+tests/**/CTestTestfile.cmake
+
+# Example build artifacts
+examples/simple_player/simple_player
+examples/**/CMakeFiles/
+examples/**/Makefile
+examples/**/cmake_install.cmake
+examples/**/CTestTestfile.cmake
+examples/**/*.mp3
+examples/**/*.mp4
+examples/**/*.m4a
+examples/**/*.mov
+examples/**/*.avi
+examples/**/*.mkv
 
 # macOS
 .DS_Store
@@ -57,3 +88,6 @@ vendor/
 # Documentation build
 docs/_build/
 docs/_site/
+
+# Claude worktrees
+.claude/
