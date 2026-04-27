@@ -176,6 +176,7 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
                 if (hw_result == ErrorCode::OK) {
                     LOG_INFO("Player", "VideoToolbox decoder initialized successfully");
                     hw_decoder_initialized = true;
+                    hw_decoder_active_ = true;
                     // Mark that we have a hardware frame for renderer
                     // The renderer will check frame format to detect this
                 } else {
@@ -292,6 +293,7 @@ void PlayerImpl::Close() {
     }
     video_decoder_.reset();
     audio_decoder_.reset();
+    hw_decoder_active_ = false;
     if (swr_context_) {
         swr_free(&swr_context_);
         swr_context_ = nullptr;
@@ -492,30 +494,32 @@ void PlayerImpl::PlaybackLoop() {
             // Decode video and render with sync
             if (video_decoder_ && video_renderer_) {
                 auto frame = video_decoder_->Decode(packet);
+                if (!frame && hw_decoder_active_) {
+                    LOG_WARNING("Player", "Hardware decoder returned null, falling back to software decoder");
+                    video_decoder_.reset();
+                    video_decoder_ = CreateFFmpegDecoder();
+                    auto sw_result = video_decoder_->Initialize(demuxer_->GetVideoCodecParameters());
+                    if (sw_result == ErrorCode::OK) {
+                        hw_decoder_active_ = false;
+                        frame = video_decoder_->Decode(packet);
+                    } else {
+                        LOG_ERROR("Player", "Failed to initialize software decoder fallback");
+                    }
+                }
+
                 if (frame) {
                     // Calculate PTS in seconds
                     double frame_pts = frame->pts * video_timebase_;
 
-                    // Wait for sync if audio is playing (audio is master clock)
+                    // AV sync for local playback: only skip late frames, don't wait for early ones.
+                    // Local decode is faster than real-time; sleeping blocks audio writes and causes underrun.
                     if (audioStreamIndex >= 0 && audio_prebuffered) {
                         int64_t delay_ms = audio_clock_.GetVideoDelayMs(frame_pts);
-
-                        // If frame is early, wait
-                        if (delay_ms > 5) {
-                            if (delay_ms > 100) {
-                                // Cap max wait to prevent long stalls
-                                delay_ms = 100;
-                            }
-                            std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
-                        }
-                        // If frame is very late (>100ms), skip it
-                        else if (delay_ms < -100) {
-                            LOG_INFO("Player", "Skipping late video frame, PTS: " + std::to_string(frame_pts) +
-                                     ", delay: " + std::to_string(delay_ms) + "ms");
+                        if (delay_ms < -100) {
                             continue;
                         }
                     } else if (audioStreamIndex < 0) {
-                        // No audio - use simple frame rate control
+                        // No audio - pace by frame rate
                         std::this_thread::sleep_for(std::chrono::milliseconds(33));
                     }
 

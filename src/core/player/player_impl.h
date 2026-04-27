@@ -117,6 +117,9 @@ private:
     // Timebase for video stream
     double video_timebase_ = 0.0;
     double audio_timebase_ = 0.0;
+
+    // Hardware decoder fallback tracking
+    bool hw_decoder_active_ = false;
 };
 
 } // namespace avsdk

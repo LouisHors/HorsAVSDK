@@ -9,6 +9,7 @@
 #include "avsdk/player_config.h"
 #include "avsdk/types.h"
 #include "avsdk/data_bypass.h"
+#include "platform/macos/metal_renderer.h"
 #include <memory>
 #include <string>
 
@@ -231,6 +232,12 @@ using namespace avsdk;
 
     void *nativeWindow = (__bridge void *)view;
     _cppPlayer->SetRenderView(nativeWindow);
+
+    // Create and attach the platform-specific Metal renderer
+    auto renderer = CreateMetalRenderer();
+    if (renderer) {
+        _cppPlayer->SetRenderer(std::move(renderer));
+    }
 }
 
 - (void)setRenderMode:(HorsAVRenderMode)mode {

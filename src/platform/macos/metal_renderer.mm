@@ -382,6 +382,8 @@ ErrorCode MetalRenderer::RenderSoftwareFrame(const AVFrame* frame) {
         [encoder setFragmentTexture:yTexture atIndex:0];
         [encoder setFragmentTexture:uTexture atIndex:1];
         [encoder setFragmentTexture:vTexture atIndex:2];
+    } else {
+        LOG_WARNING("MetalRenderer", "Unsupported frame format: " + std::to_string(frame->format) + ", no textures uploaded");
     }
 
     // Draw
