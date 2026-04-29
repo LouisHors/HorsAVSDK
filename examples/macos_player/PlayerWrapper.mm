@@ -126,6 +126,26 @@
     }];
 }
 
+#pragma mark - Audio Tracks
+
+- (NSArray<HorsAVAudioTrackInfo *> *)audioTracks {
+    return self.player.audioTracks;
+}
+
+- (NSInteger)selectedAudioTrack {
+    return self.player.selectedAudioTrack;
+}
+
+- (BOOL)selectAudioTrack:(NSInteger)trackIndex {
+    if (!self.player) return NO;
+    NSError *error;
+    BOOL success = [self.player selectAudioTrack:trackIndex error:&error];
+    if (!success && error) {
+        [self reportError:error];
+    }
+    return success;
+}
+
 #pragma mark - Rendering
 
 - (void)setRenderView:(NSView *)view {
@@ -145,6 +165,7 @@
     self.videoSize = CGSizeMake(info.videoWidth, info.videoHeight);
     self.state = DemoPlayerStateReady;
     [self notifyStateChanged];
+    [self notifyMediaPrepared:info];
 }
 
 - (void)player:(HorsAVPlayer *)player didChangeState:(HorsAVPlayerState)oldState toState:(HorsAVPlayerState)newState {
@@ -212,6 +233,14 @@
     dispatch_async(dispatch_get_main_queue(), ^{
         if ([self.delegate respondsToSelector:@selector(playerWrapper:didUpdateProgress:duration:)]) {
             [self.delegate playerWrapper:self didUpdateProgress:self.currentTime duration:self.duration];
+        }
+    });
+}
+
+- (void)notifyMediaPrepared:(HorsAVMediaInfo *)info {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if ([self.delegate respondsToSelector:@selector(playerWrapper:didPrepareMedia:)]) {
+            [self.delegate playerWrapper:self didPrepareMedia:info];
         }
     });
 }
