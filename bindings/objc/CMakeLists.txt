@@ -84,6 +84,7 @@ if(PLATFORM STREQUAL "macOS")
 
     target_include_directories(HorsAVSDK PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/Internal
         ${CMAKE_SOURCE_DIR}/include
         ${CMAKE_SOURCE_DIR}/src
     )

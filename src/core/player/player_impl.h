@@ -38,6 +38,11 @@ public:
     Timestamp GetCurrentPosition() const override;
     Timestamp GetDuration() const override;
 
+    std::vector<AudioTrackInfo> GetAudioTracks() const override;
+    ErrorCode SelectAudioTrack(int trackIndex) override;
+    void SetMixAllAudioTracks(bool enable) override;
+    bool GetMixAllAudioTracks() const override;
+
     ErrorCode SetRenderer(std::shared_ptr<IRenderer> renderer) override;
     void SetRenderView(void* native_window) override;
 
@@ -55,6 +60,7 @@ public:
 
 private:
     void PlaybackLoop();
+    void VideoRenderLoop();
     void DispatchDecodedVideoFrame(const VideoFrame& frame);
     void DispatchDecodedAudioFrame(const AudioFrame& frame);
     void RenderVideoFrame(const AVFrame* frame);
@@ -69,7 +75,7 @@ private:
 
     std::unique_ptr<IDemuxer> demuxer_;
     std::unique_ptr<IDecoder> video_decoder_;
-    std::unique_ptr<IDecoder> audio_decoder_;
+    std::vector<std::unique_ptr<IDecoder>> audio_decoders_;
     std::shared_ptr<IRenderer> video_renderer_;
     std::unique_ptr<IAudioRenderer> audio_renderer_;
 
@@ -114,9 +120,25 @@ private:
     std::condition_variable video_queue_cv_;
     static constexpr size_t kMaxVideoQueueSize = 10;
 
+    // Video render thread for AV sync
+    std::thread video_render_thread_;
+    std::atomic<bool> video_render_stop_{false};
+    std::atomic<bool> playback_finished_{false};
+
     // Timebase for video stream
     double video_timebase_ = 0.0;
-    double audio_timebase_ = 0.0;
+    std::vector<double> audio_timebases_;
+    int selected_audio_track_ = 0;
+    double first_audio_pts_ = -1.0;  // First audio PTS for sync baseline
+
+    // Audio mixing
+    bool mix_all_audio_tracks_ = false;
+    // Each track's decoded PCM buffer (S16 interleaved samples)
+    std::vector<std::vector<int16_t>> audio_track_mix_buffers_;
+    void MixAndWriteAudioBuffers();
+
+    // Hardware decoder fallback tracking
+    bool hw_decoder_active_ = false;
 };
 
 } // namespace avsdk

@@ -23,12 +23,13 @@ public:
     virtual MediaInfo GetMediaInfo() const = 0;
     virtual int GetVideoStreamIndex() const = 0;
     virtual int GetAudioStreamIndex() const = 0;
+    virtual std::vector<int> GetAudioStreamIndices() const = 0;
     virtual AVCodecParameters* GetVideoCodecParameters() const = 0;
-    virtual AVCodecParameters* GetAudioCodecParameters() const = 0;
+    virtual AVCodecParameters* GetAudioCodecParameters(int streamIndex = -1) const = 0;
 
     // Get stream timebase for PTS calculation
     virtual double GetVideoTimebase() const = 0;
-    virtual double GetAudioTimebase() const = 0;
+    virtual double GetAudioTimebase(int streamIndex = -1) const = 0;
 };
 
 std::unique_ptr<IDemuxer> CreateFFmpegDemuxer();

@@ -50,17 +50,31 @@ ErrorCode FFmpegDecoder::Initialize(AVCodecParameters* codecpar) {
 }
 
 AVFramePtr FFmpegDecoder::Decode(const AVPacketPtr& packet) {
-    if (!codec_ctx_ || !packet) return nullptr;
+    if (!codec_ctx_) return nullptr;
 
-    int ret = avcodec_send_packet(codec_ctx_, packet.get());
-    if (ret < 0) {
-        return nullptr;
+    int ret;
+    if (packet) {
+        ret = avcodec_send_packet(codec_ctx_, packet.get());
+        if (ret < 0) {
+            return nullptr;
+        }
+    } else {
+        // Flush mode: signal EOF to drain buffered frames
+        ret = avcodec_send_packet(codec_ctx_, nullptr);
+        if (ret < 0 && ret != AVERROR_EOF) {
+            return nullptr;
+        }
     }
 
     AVFrame* frame = av_frame_alloc();
     ret = avcodec_receive_frame(codec_ctx_, frame);
 
     if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+        av_frame_free(&frame);
+        return nullptr;
+    }
+
+    if (ret < 0) {
         av_frame_free(&frame);
         return nullptr;
     }

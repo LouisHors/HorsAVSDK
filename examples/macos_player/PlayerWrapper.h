@@ -1,6 +1,7 @@
 #import <Cocoa/Cocoa.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <MetalKit/MetalKit.h>
+#import "HorsAVTypes.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -27,6 +28,7 @@ typedef NS_ENUM(NSInteger, DecoderMode) {
 - (void)playerWrapper:(PlayerWrapper *)wrapper stateChanged:(DemoPlayerState)state;
 - (void)playerWrapper:(PlayerWrapper *)wrapper didUpdateProgress:(NSTimeInterval)currentTime duration:(NSTimeInterval)duration;
 - (void)playerWrapper:(PlayerWrapper *)wrapper didEncounterError:(NSError *)error;
+- (void)playerWrapper:(PlayerWrapper *)wrapper didPrepareMedia:(HorsAVMediaInfo *)info;
 @end
 
 @interface PlayerWrapper : NSObject
@@ -50,13 +52,20 @@ typedef NS_ENUM(NSInteger, DecoderMode) {
 
 // Playback control
 - (BOOL)openFile:(NSString *)filePath;
+- (BOOL)openURL:(NSURL *)url;
 - (void)play;
 - (void)pause;
 - (void)stop;
 - (void)seekTo:(NSTimeInterval)time;
 
+// Audio tracks
+@property (nonatomic, readonly, nullable, copy) NSArray<HorsAVAudioTrackInfo *> *audioTracks;
+@property (nonatomic, readonly) NSInteger selectedAudioTrack;
+- (BOOL)selectAudioTrack:(NSInteger)trackIndex;
+@property (nonatomic, readwrite) BOOL mixAllAudioTracks;
+
 // Rendering
-- (void)setRenderView:(MTKView *)view;
+- (void)setRenderView:(NSView *)view;
 
 @end
 

@@ -32,6 +32,11 @@ MetalRenderer::~MetalRenderer() {
 }
 
 ErrorCode MetalRenderer::Initialize(void* native_window, int width, int height) {
+    // Release any resources from a previous initialization to avoid leaks on re-open
+    if (device_) {
+        Release();
+    }
+
     width_ = width;
     height_ = height;
 
@@ -47,11 +52,35 @@ ErrorCode MetalRenderer::Initialize(void* native_window, int width, int height) 
 
     // Create MTKView from native window
     if (native_window) {
-        view_ = (__bridge_retained void*)(__bridge MTKView*)native_window;
-        MTKView* view = (__bridge MTKView*)view_;
-        view.device = device;
-        view.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
-        view.depthStencilPixelFormat = MTLPixelFormatInvalid;
+        // Determine if user passed an NSView or MTKView
+        id windowObj = (__bridge id)native_window;
+        MTKView* view = nil;
+
+        if ([windowObj isKindOfClass:[MTKView class]]) {
+            // User passed an MTKView directly (backward compatible)
+            view = (MTKView*)windowObj;
+            view_ = (__bridge_retained void*)view;
+        } else if ([windowObj isKindOfClass:[NSView class]]) {
+            // User passed an NSView - SDK creates MTKView internally
+            NSView* parentView = (NSView*)windowObj;
+            parent_view_ = (__bridge_retained void*)parentView;
+            mtk_view_created_by_sdk_ = true;
+
+            view = [[MTKView alloc] initWithFrame:parentView.bounds];
+            view.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+            view.device = device;
+            view.colorPixelFormat = MTLPixelFormatBGRA8Unorm;
+            view.depthStencilPixelFormat = MTLPixelFormatInvalid;
+            view.enableSetNeedsDisplay = NO;
+            view.paused = YES;
+
+            [parentView addSubview:view];
+            view_ = (__bridge_retained void*)view;
+        } else {
+            LOG_ERROR("MetalRenderer", "Invalid native window type - expected NSView or MTKView");
+            return ErrorCode::InvalidParameter;
+        }
+
         // Cache the metal layer on main thread to avoid background thread access
         metal_layer_ = (__bridge_retained void*)view.layer;
     }
@@ -167,6 +196,7 @@ ErrorCode MetalRenderer::RenderFrame(const AVFrame* frame) {
 }
 
 ErrorCode MetalRenderer::RenderHardwareFrame(const AVFrame* frame) {
+    @autoreleasepool {
     // Get CVPixelBuffer from hardware decoded frame
     CVPixelBufferRef pixelBuffer = (CVPixelBufferRef)frame->data[3];
     if (!pixelBuffer) {
@@ -284,10 +314,12 @@ ErrorCode MetalRenderer::RenderHardwareFrame(const AVFrame* frame) {
 
     CVPixelBufferUnlockBaseAddress(pixelBuffer, kCVPixelBufferLock_ReadOnly);
 
+    } // @autoreleasepool
     return ErrorCode::OK;
 }
 
 ErrorCode MetalRenderer::RenderSoftwareFrame(const AVFrame* frame) {
+    @autoreleasepool {
     if (!frame || !device_ || !command_queue_ || !pipeline_state_) {
         return ErrorCode::InvalidParameter;
     }
@@ -382,6 +414,8 @@ ErrorCode MetalRenderer::RenderSoftwareFrame(const AVFrame* frame) {
         [encoder setFragmentTexture:yTexture atIndex:0];
         [encoder setFragmentTexture:uTexture atIndex:1];
         [encoder setFragmentTexture:vTexture atIndex:2];
+    } else {
+        LOG_WARNING("MetalRenderer", "Unsupported frame format: " + std::to_string(frame->format) + ", no textures uploaded");
     }
 
     // Draw
@@ -399,6 +433,7 @@ ErrorCode MetalRenderer::RenderSoftwareFrame(const AVFrame* frame) {
     [commandBuffer presentDrawable:drawable];
     [commandBuffer commit];
 
+    } // @autoreleasepool
     return ErrorCode::OK;
 }
 
@@ -408,8 +443,17 @@ void MetalRenderer::Release() {
         metal_layer_ = nullptr;
     }
     if (view_) {
+        if (mtk_view_created_by_sdk_) {
+            // Remove the internally created MTKView from its parent
+            MTKView* view = (__bridge MTKView*)view_;
+            [view removeFromSuperview];
+        }
         CFRelease(view_);
         view_ = nullptr;
+    }
+    if (parent_view_) {
+        CFRelease(parent_view_);
+        parent_view_ = nullptr;
     }
     if (vertex_buffer_) {
         CFRelease(vertex_buffer_);

@@ -133,16 +133,44 @@ NS_SWIFT_NAME(Player)
 #pragma mark - Rendering
 
 /**
- * Set the Metal view for video rendering
- * @param view MTKView to render video to
+ * Set the view for video rendering
+ * @param view NSView to render video to. SDK will create and manage MTKView internally.
  */
-- (void)setRenderView:(nullable MTKView *)view NS_SWIFT_NAME(setRenderView(_:));
+- (void)setRenderView:(nullable NSView *)view NS_SWIFT_NAME(setRenderView(_:));
 
 /**
  * Set the render mode
  * @param mode The render mode
  */
 - (void)setRenderMode:(HorsAVRenderMode)mode NS_SWIFT_NAME(setRenderMode(_:));
+
+#pragma mark - Audio Tracks
+
+/**
+ * Available audio tracks for the currently opened media.
+ * Returns nil if no media is loaded or no audio is present.
+ */
+@property (nonatomic, readonly, nullable, copy) NSArray<HorsAVAudioTrackInfo *> *audioTracks;
+
+/**
+ * Index of the currently selected audio track
+ */
+@property (nonatomic, readonly) NSInteger selectedAudioTrack;
+
+/**
+ * Select an audio track by index
+ * @param trackIndex The track index from audioTracks array
+ * @param error Error output if selection fails
+ * @return YES if successful, NO otherwise
+ */
+- (BOOL)selectAudioTrack:(NSInteger)trackIndex error:(NSError **)error
+    NS_SWIFT_NAME(selectAudioTrack(_:));
+
+/**
+ * When YES, all audio tracks are mixed and played simultaneously.
+ * When NO (default), only the selected track is played.
+ */
+@property (nonatomic, readwrite, getter=isMixAllAudioTracks) BOOL mixAllAudioTracks;
 
 #pragma mark - Data Bypass
 

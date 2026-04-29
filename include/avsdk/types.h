@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace avsdk {
 
@@ -9,6 +10,14 @@ using Timestamp = int64_t;
 struct VideoResolution {
     int width;
     int height;
+};
+
+struct AudioTrackInfo {
+    int stream_index = -1;
+    std::string language;
+    std::string title;
+    int sample_rate = 0;
+    int channels = 0;
 };
 
 struct MediaInfo {
@@ -22,6 +31,7 @@ struct MediaInfo {
     int audio_channels;
     bool has_video;
     bool has_audio;
+    std::vector<AudioTrackInfo> audio_tracks;
 };
 
 // Data bypass related types

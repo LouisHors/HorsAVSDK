@@ -253,11 +253,11 @@ AVCodecParameters* NetworkDemuxer::GetVideoCodecParameters() const {
     return format_ctx_->streams[video_stream_index_]->codecpar;
 }
 
-AVCodecParameters* NetworkDemuxer::GetAudioCodecParameters() const {
-    if (!format_ctx_ || audio_stream_index_ < 0) {
-        return nullptr;
-    }
-    return format_ctx_->streams[audio_stream_index_]->codecpar;
+AVCodecParameters* NetworkDemuxer::GetAudioCodecParameters(int streamIndex) const {
+    if (!format_ctx_) return nullptr;
+    int idx = streamIndex >= 0 ? streamIndex : audio_stream_index_;
+    if (idx < 0) return nullptr;
+    return format_ctx_->streams[idx]->codecpar;
 }
 
 double NetworkDemuxer::GetVideoTimebase() const {
@@ -268,11 +268,11 @@ double NetworkDemuxer::GetVideoTimebase() const {
     return av_q2d(stream->time_base);
 }
 
-double NetworkDemuxer::GetAudioTimebase() const {
-    if (!format_ctx_ || audio_stream_index_ < 0) {
-        return 0.0;
-    }
-    AVStream* stream = format_ctx_->streams[audio_stream_index_];
+double NetworkDemuxer::GetAudioTimebase(int streamIndex) const {
+    if (!format_ctx_) return 0.0;
+    int idx = streamIndex >= 0 ? streamIndex : audio_stream_index_;
+    if (idx < 0) return 0.0;
+    AVStream* stream = format_ctx_->streams[idx];
     return av_q2d(stream->time_base);
 }
 

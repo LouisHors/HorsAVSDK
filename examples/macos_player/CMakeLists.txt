@@ -19,6 +19,7 @@ set(MACOS_PLAYER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/PlayerView.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/PlayerWrapper.mm"
     "${CMAKE_CURRENT_SOURCE_DIR}/ViewController.mm"
+    "${CMAKE_CURRENT_SOURCE_DIR}/OnlinePlayerViewController.mm"
 )
 
 # Header files
@@ -27,6 +28,7 @@ set(MACOS_PLAYER_HEADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/PlayerView.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/PlayerWrapper.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/ViewController.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/OnlinePlayerViewController.h"
 )
 
 # Create macOS app bundle

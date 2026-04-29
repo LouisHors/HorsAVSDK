@@ -48,6 +48,25 @@ tests/**/Makefile
 tests/**/cmake_install.cmake
 tests/**/CTestTestfile.cmake
 
+# Test binaries (built in-tree)
+tests/*/*_test
+tests/*/*_test.exe
+tests/*/video_recorder_test
+tests/*/*_test.cpp.o
+
+# Test media files (large, don't commit)
+tests/**/*.mp4
+tests/**/*.mov
+tests/**/*.avi
+tests/**/*.mkv
+tests/**/*.m4a
+tests/**/*.mp3
+tests/**/*.pcm
+tests/**/*.wav
+tests/**/*.aac
+tests/**/*.h264
+tests/**/*.hevc
+
 # Example build artifacts
 examples/simple_player/simple_player
 examples/**/CMakeFiles/
