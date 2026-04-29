@@ -31,7 +31,20 @@ ErrorCode FFmpegDemuxer::Open(const std::string& url) {
 
     format_ctx_ = avformat_alloc_context();
 
-    int ret = avformat_open_input(&format_ctx_, url.c_str(), nullptr, nullptr);
+    // Set network options for streaming protocols (HLS, RTMP, etc.)
+    AVDictionary* opts = nullptr;
+    if (url.find("://") != std::string::npos && url.find("file://") != 0) {
+        // Network stream: set timeout and buffer
+        av_dict_set(&opts, "timeout", "30000000", 0);  // 30 seconds in microseconds
+        av_dict_set(&opts, "buffer_size", "65536", 0);
+        // For HLS: allow cache and set live start index
+        if (url.find(".m3u8") != std::string::npos) {
+            av_dict_set(&opts, "live_start_index", "-3", 0);
+        }
+    }
+
+    int ret = avformat_open_input(&format_ctx_, url.c_str(), nullptr, &opts);
+    av_dict_free(&opts);
     if (ret < 0) {
         LOG_ERROR("Demuxer", "Failed to open input: " + url);
         return ErrorCode::FileOpenFailed;

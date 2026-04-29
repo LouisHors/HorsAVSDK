@@ -2,7 +2,7 @@
 #import "PlayerView.h"
 #import "PlayerWrapper.h"
 
-@interface ViewController : NSViewController <PlayerViewDelegate, PlayerWrapperDelegate>
+@interface ViewController : NSViewController <PlayerWrapperDelegate>
 
 @property (strong) PlayerView *playerView;
 @property (strong) PlayerWrapper *player;
@@ -15,5 +15,6 @@
 @property (strong) NSButton *playPauseButton;
 @property (strong) NSButton *stopButton;
 @property (strong) NSButton *openButton;
+@property (strong) NSButton *onlineButton;
 
 @end

@@ -1,4 +1,5 @@
 #import "ViewController.h"
+#import "OnlinePlayerViewController.h"
 #import <AVFoundation/AVFoundation.h>
 
 @interface ViewController ()
@@ -33,7 +34,6 @@
     // Create PlayerView (fills window)
     self.playerView = [[PlayerView alloc] initWithFrame:self.view.bounds];
     self.playerView.translatesAutoresizingMaskIntoConstraints = NO;
-    self.playerView.delegate = self;
     [self.view addSubview:self.playerView];
 
     [NSLayoutConstraint activateConstraints:@[
@@ -65,6 +65,15 @@
     [self.openButton setAction:@selector(openFile:)];
     [self.openButton setBezelStyle:NSBezelStyleRounded];
     [controlsView addSubview:self.openButton];
+
+    // Online button
+    self.onlineButton = [[NSButton alloc] init];
+    self.onlineButton.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.onlineButton setTitle:@"Online"];
+    [self.onlineButton setTarget:self];
+    [self.onlineButton setAction:@selector(switchToOnline:)];
+    [self.onlineButton setBezelStyle:NSBezelStyleRounded];
+    [controlsView addSubview:self.onlineButton];
 
     // Play/Pause button
     self.playPauseButton = [[NSButton alloc] init];
@@ -126,8 +135,13 @@
         [self.openButton.centerYAnchor constraintEqualToAnchor:controlsView.centerYAnchor],
         [self.openButton.widthAnchor constraintEqualToConstant:60],
 
-        // Play/Pause button (next to Open)
-        [self.playPauseButton.leadingAnchor constraintEqualToAnchor:self.openButton.trailingAnchor constant:10],
+        // Online button (next to Open)
+        [self.onlineButton.leadingAnchor constraintEqualToAnchor:self.openButton.trailingAnchor constant:10],
+        [self.onlineButton.centerYAnchor constraintEqualToAnchor:controlsView.centerYAnchor],
+        [self.onlineButton.widthAnchor constraintEqualToConstant:70],
+
+        // Play/Pause button (next to Online)
+        [self.playPauseButton.leadingAnchor constraintEqualToAnchor:self.onlineButton.trailingAnchor constant:10],
         [self.playPauseButton.centerYAnchor constraintEqualToAnchor:controlsView.centerYAnchor],
         [self.playPauseButton.widthAnchor constraintEqualToConstant:80],
 
@@ -160,8 +174,9 @@
     self.player.delegate = self;
 
     // Initialize player and set render view
+    // User only needs to pass an NSView; SDK creates MTKView internally
     [self.player initializePlayer];
-    [self.player setRenderView:self.playerView.mtkView];
+    [self.player setRenderView:self.playerView];
 
     // Auto-load test file
     [self autoLoadTestFile];
@@ -182,6 +197,12 @@
 }
 
 #pragma mark - Actions
+
+- (void)switchToOnline:(id)sender {
+    OnlinePlayerViewController *onlineVC = [[OnlinePlayerViewController alloc] initWithNibName:nil bundle:nil];
+    NSWindow *window = self.view.window;
+    window.contentViewController = onlineVC;
+}
 
 - (void)openFile:(id)sender {
     NSOpenPanel *openPanel = [NSOpenPanel openPanel];
@@ -283,24 +304,6 @@
     NSString *durationStr = [self formatTime:duration];
     double progress = duration > 0 ? (position / duration) : 0;
     [self.timeLabel setStringValue:[NSString stringWithFormat:@"%@ / %@ (%.0f%%)", positionStr, durationStr, progress * 100]];
-}
-
-#pragma mark - PlayerViewDelegate
-
-- (void)playerView:(PlayerView *)playerView didRequestRender:(CVPixelBufferRef)pixelBuffer {
-    // Render callback - PlayerWrapper handles this internally
-}
-
-- (void)playerView:(PlayerView *)playerView didChangeSize:(NSSize)size {
-    // Handle view size change
-}
-
-- (void)playerView:(MTKView *)view drawableSizeWillChange:(CGSize)size {
-    // Handle drawable size change
-}
-
-- (void)renderInView:(MTKView *)view {
-    // Render in Metal view - handled by PlayerWrapper
 }
 
 #pragma mark - PlayerWrapperDelegate

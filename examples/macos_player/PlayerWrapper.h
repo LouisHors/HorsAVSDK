@@ -50,13 +50,14 @@ typedef NS_ENUM(NSInteger, DecoderMode) {
 
 // Playback control
 - (BOOL)openFile:(NSString *)filePath;
+- (BOOL)openURL:(NSURL *)url;
 - (void)play;
 - (void)pause;
 - (void)stop;
 - (void)seekTo:(NSTimeInterval)time;
 
 // Rendering
-- (void)setRenderView:(MTKView *)view;
+- (void)setRenderView:(NSView *)view;
 
 @end
 

@@ -21,10 +21,10 @@ NS_SWIFT_NAME(PlayerRenderer)
 @interface HorsAVPlayerRenderer : NSObject
 
 /**
- * Initialize with a MetalKit view
- * @param view The MTKView to render to
+ * Initialize with a view
+ * @param view The NSView to render to. SDK will create and manage MTKView internally.
  */
-- (instancetype)initWithView:(MTKView *)view NS_SWIFT_NAME(init(view:)) NS_DESIGNATED_INITIALIZER;
+- (instancetype)initWithView:(NSView *)view NS_SWIFT_NAME(init(view:)) NS_DESIGNATED_INITIALIZER;
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;

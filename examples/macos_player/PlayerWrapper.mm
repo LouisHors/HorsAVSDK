@@ -72,16 +72,18 @@
 #pragma mark - Playback Control
 
 - (BOOL)openFile:(NSString *)filePath {
+    NSURL *url = [NSURL fileURLWithPath:filePath];
+    return [self openURL:url];
+}
+
+- (BOOL)openURL:(NSURL *)url {
     if (!self.player) {
         if (![self initializePlayer]) {
             return NO;
         }
     }
 
-    // Use file path directly instead of URL to avoid encoding issues with Chinese characters
-    NSURL *url = [NSURL fileURLWithPath:filePath];
     NSError *error;
-
     if (![self.player openURL:url error:&error]) {
         [self reportError:error];
         self.state = DemoPlayerStateError;
@@ -126,7 +128,7 @@
 
 #pragma mark - Rendering
 
-- (void)setRenderView:(MTKView *)view {
+- (void)setRenderView:(NSView *)view {
     if (!self.player) {
         if (![self initializePlayer]) {
             return;

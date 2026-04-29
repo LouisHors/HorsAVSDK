@@ -25,6 +25,8 @@ private:
     void* index_buffer_ = nullptr;
     void* library_ = nullptr;
     void* metal_layer_ = nullptr;  // Cached CAMetalLayer reference
+    void* parent_view_ = nullptr;  // Parent NSView if SDK created MTKView internally
+    bool mtk_view_created_by_sdk_ = false;  // Whether we created the MTKView internally
     int width_ = 0;
     int height_ = 0;
 };

@@ -40,7 +40,7 @@ private:
     int volume_ = 100;
 
     std::unique_ptr<RingBuffer> ring_buffer_;
-    static constexpr size_t kBufferCapacity = 2 * 1024 * 1024; // 2MB ring buffer for ~11 seconds of audio
+    static constexpr size_t kBufferCapacity = 4 * 1024 * 1024; // 4MB ring buffer for ~22 seconds of audio
 };
 
 } // namespace avsdk

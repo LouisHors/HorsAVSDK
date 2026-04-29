@@ -3,12 +3,12 @@
 // MARK: - HorsAVPlayerRenderer Implementation
 
 @interface HorsAVPlayerRenderer ()
-@property (nonatomic, strong) MTKView *view;
+@property (nonatomic, strong) NSView *view;
 @end
 
 @implementation HorsAVPlayerRenderer
 
-- (instancetype)initWithView:(MTKView *)view {
+- (instancetype)initWithView:(NSView *)view {
     self = [super init];
     if (self) {
         _view = view;

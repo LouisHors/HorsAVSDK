@@ -25,10 +25,25 @@ enum class URLType {
     LocalFile,
     HTTP,
     HTTPS,
+    HLS,
+    FLV,
+    RTMP,
     Unknown
 };
 
 static URLType DetectURLType(const std::string& url) {
+    // Check for rtmp://
+    if (url.rfind("rtmp://", 0) == 0 || url.rfind("rtmps://", 0) == 0) {
+        return URLType::RTMP;
+    }
+    // Check for HLS by .m3u8 extension
+    if (url.find(".m3u8") != std::string::npos) {
+        return URLType::HLS;
+    }
+    // Check for FLV by .flv extension
+    if (url.find(".flv") != std::string::npos) {
+        return URLType::FLV;
+    }
     // Check for http:// or https://
     if (url.rfind("http://", 0) == 0) {
         return URLType::HTTP;
@@ -134,13 +149,64 @@ void PlayerImpl::NotifyBuffering(bool isBuffering, int percent) {
 }
 
 ErrorCode PlayerImpl::Open(const std::string& url) {
+    // Clean up any resources from a previous open to prevent memory leaks
+    if (audio_renderer_) {
+        audio_renderer_->Close();
+        audio_renderer_.reset();
+    }
+    if (audio_decoder_) {
+        audio_decoder_->Close();
+        audio_decoder_.reset();
+    }
+    if (video_decoder_) {
+        video_decoder_->Close();
+        video_decoder_.reset();
+    }
+    hw_decoder_active_ = false;
+    if (swr_context_) {
+        swr_free(&swr_context_);
+        swr_context_ = nullptr;
+    }
+    audio_resample_buffer_.clear();
+    audio_clock_.Reset();
+    if (audio_dump_file_.is_open()) {
+        audio_dump_file_.close();
+    }
+    audio_dump_initialized_ = false;
+    if (demuxer_) {
+        demuxer_->Close();
+        demuxer_.reset();
+    }
+    {
+        std::lock_guard<std::mutex> lock(video_queue_mutex_);
+        video_frame_queue_.clear();
+    }
+    playback_finished_ = false;
+
     URLType urlType = DetectURLType(url);
-    if (urlType == URLType::HTTP || urlType == URLType::HTTPS) {
-        LOG_INFO("Player", "Detected network URL, using NetworkDemuxer");
-        demuxer_ = CreateNetworkDemuxer();
-    } else {
-        LOG_INFO("Player", "Detected local file URL, using FFmpegDemuxer");
-        demuxer_ = CreateFFmpegDemuxer();
+    switch (urlType) {
+        case URLType::HLS:
+            LOG_INFO("Player", "Detected HLS stream, using FFmpegDemuxer (FFmpeg built-in HLS support)");
+            demuxer_ = CreateFFmpegDemuxer();
+            break;
+        case URLType::FLV:
+            LOG_INFO("Player", "Detected FLV stream, using NetworkDemuxer");
+            demuxer_ = CreateNetworkDemuxer();
+            break;
+        case URLType::RTMP:
+            LOG_INFO("Player", "Detected RTMP stream, using FFmpegDemuxer");
+            demuxer_ = CreateFFmpegDemuxer();
+            break;
+        case URLType::HTTP:
+        case URLType::HTTPS:
+            LOG_INFO("Player", "Detected network URL, using NetworkDemuxer");
+            demuxer_ = CreateNetworkDemuxer();
+            break;
+        case URLType::LocalFile:
+        default:
+            LOG_INFO("Player", "Detected local file URL, using FFmpegDemuxer");
+            demuxer_ = CreateFFmpegDemuxer();
+            break;
     }
 
     auto result = demuxer_->Open(url);
@@ -307,6 +373,12 @@ void PlayerImpl::Close() {
         audio_renderer_->Close();
         audio_renderer_.reset();
     }
+
+    // Clear video frame queue
+    {
+        std::lock_guard<std::mutex> lock(video_queue_mutex_);
+        video_frame_queue_.clear();
+    }
 }
 
 ErrorCode PlayerImpl::Play() {
@@ -318,12 +390,18 @@ ErrorCode PlayerImpl::Play() {
     if (playback_thread_.joinable()) {
         playback_thread_.join();
     }
+    if (video_render_thread_.joinable()) {
+        video_render_thread_.join();
+    }
 
     auto oldState = state_.exchange(PlayerState::kPlaying);
     should_stop_ = false;
+    video_render_stop_ = false;
+    playback_finished_ = false;
     playback_thread_ = std::thread(&PlayerImpl::PlaybackLoop, this);
+    video_render_thread_ = std::thread(&PlayerImpl::VideoRenderLoop, this);
 
-    LOG_INFO("Player", "Started playback");
+    LOG_INFO("Player", "Started playback (playback + video render threads)");
     NotifyStateChanged(oldState, PlayerState::kPlaying);
     return ErrorCode::OK;
 }
@@ -338,9 +416,20 @@ ErrorCode PlayerImpl::Pause() {
 ErrorCode PlayerImpl::Stop() {
     auto oldState = state_.exchange(PlayerState::kStopped);
     should_stop_ = true;
+    video_render_stop_ = true;
+    video_queue_cv_.notify_all();
 
     if (playback_thread_.joinable()) {
         playback_thread_.join();
+    }
+    if (video_render_thread_.joinable()) {
+        video_render_thread_.join();
+    }
+
+    // Clear video frame queue
+    {
+        std::lock_guard<std::mutex> lock(video_queue_mutex_);
+        video_frame_queue_.clear();
     }
 
     LOG_INFO("Player", "Stopped");
@@ -429,10 +518,9 @@ void PlayerImpl::PlaybackLoop() {
     Timestamp last_progress_report = 0;
     const Timestamp progress_interval_ms = 500; // Report every 500ms
 
-    // Buffer flow control - maintain 2-5 seconds of buffered audio
-    const int kMinBufferMs = 1000;   // Minimum: 1 second (need to read more)
-    const int kMaxBufferMs = 5000;   // Maximum: 5 seconds (pause reading)
-    const int kTargetBufferMs = 3000; // Target: 3 seconds
+    // Buffer flow control - keep audio buffer small to match video queue latency (~333ms)
+    const int kMinBufferMs = 100;    // Minimum: 100ms
+    const int kMaxBufferMs = 350;    // Maximum: 350ms (match video queue 10 frames @ 30fps ≈ 333ms)
 
     // Start audio clock
     audio_clock_.Reset();
@@ -440,24 +528,13 @@ void PlayerImpl::PlaybackLoop() {
     while (!should_stop_ && state_ == PlayerState::kPlaying) {
         if (!demuxer_) break;
 
-        // Flow control: Check audio buffer level before reading next packet
-        // This implements the "circular buffer read/write" strategy
+        // Non-blocking audio flow control: if buffer is very full, give AudioUnit
+        // a chance to drain by yielding briefly. This avoids losing audio data
+        // without blocking video decoding for long periods.
         if (audio_renderer_ && audio_prebuffered && audioStreamIndex >= 0) {
             int buffered_ms = audio_renderer_->GetBufferedDuration();
-
             if (buffered_ms > kMaxBufferMs) {
-                // Buffer is full - wait for consumer to drain
-                LOG_INFO("Player", "Buffer full (" + std::to_string(buffered_ms) +
-                         "ms), pausing read to let playback consume...");
-                int wait_count = 0;
-                while (wait_count < 100 && !should_stop_) {  // Max 1 second wait
-                    buffered_ms = audio_renderer_->GetBufferedDuration();
-                    if (buffered_ms <= kTargetBufferMs) {
-                        break;
-                    }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    wait_count++;
-                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
             }
         }
 
@@ -465,6 +542,107 @@ void PlayerImpl::PlaybackLoop() {
         total_packets_read++;  // DEBUG
         if (!packet) {
             LOG_INFO("Player", "Total packets read: " + std::to_string(total_packets_read));  // DEBUG
+
+            // ---- Drain decoder internal buffers ----
+            // FFmpeg decoders buffer frames internally; send nullptr to flush them out.
+            if (video_decoder_ && videoStreamIndex >= 0) {
+                LOG_INFO("Player", "Draining video decoder...");
+                int drained = 0;
+                while (!should_stop_) {
+                    auto frame = video_decoder_->Decode(nullptr);
+                    if (!frame) break;
+                    drained++;
+                    double frame_pts = frame->pts * video_timebase_;
+                    {
+                        std::unique_lock<std::mutex> lock(video_queue_mutex_);
+                        video_queue_cv_.wait(lock, [this] {
+                            return video_frame_queue_.size() < kMaxVideoQueueSize || should_stop_;
+                        });
+                        if (should_stop_) break;
+                        VideoFrameItem item;
+                        item.frame = frame;
+                        item.pts = frame_pts;
+                        video_frame_queue_.push_back(std::move(item));
+                    }
+                    video_queue_cv_.notify_one();
+                }
+                LOG_INFO("Player", "Drained " + std::to_string(drained) + " video frames from decoder");
+            }
+
+            if (audio_decoder_ && audioStreamIndex >= 0) {
+                LOG_INFO("Player", "Draining audio decoder...");
+                int drained = 0;
+                while (!should_stop_) {
+                    auto frame = audio_decoder_->Decode(nullptr);
+                    if (!frame) break;
+                    drained++;
+                    // Process drained audio frame same as normal decode path
+                    AVSampleFormat srcFormat = static_cast<AVSampleFormat>(frame->format);
+                    if (srcFormat != AV_SAMPLE_FMT_S16 && swr_context_) {
+                        int out_samples = av_rescale_rnd(swr_get_delay(swr_context_, frame->sample_rate) + frame->nb_samples,
+                                                         frame->sample_rate, frame->sample_rate, AV_ROUND_UP);
+                        int out_channels = frame->ch_layout.nb_channels;
+                        size_t out_buffer_size = out_samples * out_channels * sizeof(int16_t);
+                        if (audio_resample_buffer_.size() < out_buffer_size) {
+                            audio_resample_buffer_.resize(out_buffer_size);
+                        }
+                        uint8_t* out_ptr = audio_resample_buffer_.data();
+                        int converted_samples = swr_convert(swr_context_, &out_ptr, out_samples,
+                                                            const_cast<const uint8_t**>(frame->data), frame->nb_samples);
+                        if (converted_samples > 0) {
+                            int data_size = converted_samples * out_channels * sizeof(int16_t);
+                            int written = 0, retries = 0;
+                            while (written < data_size && retries < 20) {
+                                int n = audio_renderer_->WriteAudio(audio_resample_buffer_.data() + written, data_size - written);
+                                written += n;
+                                if (written < data_size) {
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                                    retries++;
+                                }
+                            }
+                            if (audio_prebuffered) {
+                                audio_clock_.UpdateBySamples(converted_samples, frame->sample_rate);
+                            }
+                        }
+                    } else if (srcFormat == AV_SAMPLE_FMT_S16) {
+                        int data_size = av_samples_get_buffer_size(nullptr, frame->ch_layout.nb_channels,
+                                                                    frame->nb_samples,
+                                                                    static_cast<AVSampleFormat>(frame->format), 1);
+                        if (data_size > 0) {
+                            int written = 0, retries = 0;
+                            while (written < data_size && retries < 20) {
+                                int n = audio_renderer_->WriteAudio(frame->data[0] + written, data_size - written);
+                                written += n;
+                                if (written < data_size) {
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                                    retries++;
+                                }
+                            }
+                            if (audio_prebuffered) {
+                                audio_clock_.UpdateBySamples(frame->nb_samples, frame->sample_rate);
+                            }
+                        }
+                    }
+                }
+                LOG_INFO("Player", "Drained " + std::to_string(drained) + " audio frames from decoder");
+            }
+
+            // Mark playback as finished so RenderLoop can drain queue and exit
+            playback_finished_ = true;
+            video_queue_cv_.notify_all();
+
+            // Wait for video queue to drain before stopping audio
+            {
+                std::unique_lock<std::mutex> lock(video_queue_mutex_);
+                int wait_count = 0;
+                while (!video_frame_queue_.empty() && !should_stop_ && wait_count < 2000) {
+                    LOG_INFO("Player", "Waiting for video queue to drain, remaining: " +
+                             std::to_string(video_frame_queue_.size()));
+                    video_queue_cv_.wait_for(lock, std::chrono::milliseconds(10));
+                    wait_count++;
+                }
+            }
+
             // End of stream reached - wait for audio buffer to drain
             if (audio_renderer_ && audioStreamIndex >= 0) {
                 LOG_INFO("Player", "End of stream, waiting for audio buffer to drain...");
@@ -478,6 +656,9 @@ void PlayerImpl::PlaybackLoop() {
                     wait_count++;
                 }
             }
+
+            // Final progress update so UI shows 100%
+            NotifyProgress(GetDuration(), GetDuration());
             NotifyComplete();
             break;
         }
@@ -508,22 +689,30 @@ void PlayerImpl::PlaybackLoop() {
                 }
 
                 if (frame) {
-                    // Calculate PTS in seconds
+                    // Enqueue decoded frame for video render thread
                     double frame_pts = frame->pts * video_timebase_;
 
-                    // AV sync for local playback: only skip late frames, don't wait for early ones.
-                    // Local decode is faster than real-time; sleeping blocks audio writes and causes underrun.
-                    if (audioStreamIndex >= 0 && audio_prebuffered) {
-                        int64_t delay_ms = audio_clock_.GetVideoDelayMs(frame_pts);
-                        if (delay_ms < -100) {
-                            continue;
+                    {
+                        std::unique_lock<std::mutex> lock(video_queue_mutex_);
+                        // Block when queue is full instead of dropping frames.
+                        // This naturally throttles PlaybackLoop to real-time speed.
+                        if (video_frame_queue_.size() >= kMaxVideoQueueSize) {
+                            LOG_INFO("Player", "Video queue full (" + std::to_string(video_frame_queue_.size()) +
+                                     "), throttling decode until RenderLoop catches up");
                         }
-                    } else if (audioStreamIndex < 0) {
-                        // No audio - pace by frame rate
-                        std::this_thread::sleep_for(std::chrono::milliseconds(33));
-                    }
+                        video_queue_cv_.wait(lock, [this] {
+                            return video_frame_queue_.size() < kMaxVideoQueueSize || should_stop_;
+                        });
+                        if (should_stop_) break;
 
-                    RenderVideoFrame(frame.get());
+                        VideoFrameItem item;
+                        item.frame = frame;
+                        item.pts = frame_pts;
+                        video_frame_queue_.push_back(std::move(item));
+                        LOG_INFO("Player", "Enqueued video frame PTS=" + std::to_string(frame_pts) +
+                                 "s, queue_size=" + std::to_string(video_frame_queue_.size()));
+                    }
+                    video_queue_cv_.notify_one();
 
                     // Also dispatch for data bypass callbacks
                     VideoFrame vf;
@@ -572,7 +761,16 @@ void PlayerImpl::PlaybackLoop() {
                                                             const_cast<const uint8_t**>(frame->data), frame->nb_samples);
                         if (converted_samples > 0) {
                             int data_size = converted_samples * out_channels * sizeof(int16_t);
-                            int written = audio_renderer_->WriteAudio(audio_resample_buffer_.data(), data_size);
+                            int written = 0;
+                            int retries = 0;
+                            while (written < data_size && retries < 20) {
+                                int n = audio_renderer_->WriteAudio(audio_resample_buffer_.data() + written, data_size - written);
+                                written += n;
+                                if (written < data_size) {
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                                    retries++;
+                                }
+                            }
 
                             // Update audio clock
                             if (audio_prebuffered) {
@@ -598,7 +796,16 @@ void PlayerImpl::PlaybackLoop() {
                                                                     frame->nb_samples,
                                                                     static_cast<AVSampleFormat>(frame->format), 1);
                         if (data_size > 0) {
-                            int written = audio_renderer_->WriteAudio(frame->data[0], data_size);
+                            int written = 0;
+                            int retries = 0;
+                            while (written < data_size && retries < 20) {
+                                int n = audio_renderer_->WriteAudio(frame->data[0] + written, data_size - written);
+                                written += n;
+                                if (written < data_size) {
+                                    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                                    retries++;
+                                }
+                            }
 
                             // Update audio clock
                             if (audio_prebuffered) {
@@ -633,11 +840,10 @@ void PlayerImpl::PlaybackLoop() {
         }
 
         // Start audio playback after pre-buffering some data
-        if (!audio_prebuffered && audio_renderer_ && audio_packets_decoded >= 40) {  // ~1 second of audio
-            // Wait until we have at least 1 second of buffered audio before starting
+        if (!audio_prebuffered && audio_renderer_ && audio_packets_decoded >= 10) {  // ~250ms of audio
+            // Wait until we have at least 300ms of buffered audio before starting
             int buffered_ms = audio_renderer_->GetBufferedDuration();
-            if (buffered_ms < 1000) {
-                // Not enough data yet, continue buffering
+            if (buffered_ms < 300) {
                 continue;
             }
 
@@ -664,6 +870,109 @@ void PlayerImpl::PlaybackLoop() {
     if (oldState != PlayerState::kStopped) {
         NotifyStateChanged(oldState, PlayerState::kStopped);
     }
+}
+
+void PlayerImpl::VideoRenderLoop() {
+    LOG_INFO("Player", "Video render thread started");
+
+    // Pace according to the source video frame rate, not a hardcoded 30fps
+    double fps = media_info_.video_framerate;
+    if (fps <= 0) fps = 30.0;
+    auto frame_interval = std::chrono::milliseconds(static_cast<int>(1000.0 / fps));
+    LOG_INFO("Player", "Video render pacing: " + std::to_string(fps) + " fps, interval=" +
+             std::to_string(frame_interval.count()) + "ms");
+
+    auto next_render_time = std::chrono::steady_clock::now();
+    int frame_count = 0;
+    auto last_log_time = std::chrono::steady_clock::now();
+
+    // Loose AV drift correction state
+    double last_check_audio_time = 0.0;
+    double last_check_video_pts = 0.0;
+    int drift_check_interval = 30;  // Check every ~1 second (30 frames)
+
+    while (!video_render_stop_ && !should_stop_) {
+        // ---- 1. Timer-driven: sleep until next frame slot ----
+        auto now = std::chrono::steady_clock::now();
+        if (now < next_render_time) {
+            std::this_thread::sleep_for(next_render_time - now);
+        }
+
+        // ---- 2. Dequeue a frame ----
+        VideoFrameItem item;
+        bool got_frame = false;
+        {
+            std::unique_lock<std::mutex> lock(video_queue_mutex_);
+            if (video_queue_cv_.wait_for(lock, std::chrono::milliseconds(50), [this] {
+                return !video_frame_queue_.empty() || video_render_stop_ || should_stop_;
+            })) {
+                if (video_render_stop_ || should_stop_) break;
+                if (!video_frame_queue_.empty()) {
+                    item = std::move(video_frame_queue_.front());
+                    video_frame_queue_.erase(video_frame_queue_.begin());
+                    got_frame = true;
+                }
+            }
+        }
+        if (got_frame) {
+            video_queue_cv_.notify_one();
+        }
+
+        // No frame available - check if playback finished, otherwise retry
+        if (!got_frame) {
+            if (playback_finished_.load()) {
+                LOG_INFO("Player", "RenderLoop: playback finished, queue empty, exiting");
+                break;
+            }
+            LOG_INFO("Player", "RenderLoop: no frame available, queue empty");
+            next_render_time += frame_interval;
+            continue;
+        }
+
+        // ---- 3. Render ----
+        frame_count++;
+        auto render_now = std::chrono::steady_clock::now();
+        double actual_interval = std::chrono::duration<double>(render_now - (next_render_time - frame_interval)).count();
+        RenderVideoFrame(item.frame.get());
+
+        // ---- 4. Loose AV drift correction ----
+        // Compare video PTS delta vs audio clock delta every N frames.
+        // If they diverge beyond threshold, gently adjust next_render_time.
+        // Skip correction when playback is finishing to avoid acting on a stopped clock.
+        if (!playback_finished_.load() && frame_count % drift_check_interval == 0) {
+            double audio_now = audio_clock_.GetTime();
+            double video_now = item.pts;
+            if (last_check_audio_time > 0.0 && audio_now > 0.0) {
+                double audio_delta = audio_now - last_check_audio_time;
+                double video_delta = video_now - last_check_video_pts;
+                double drift = video_delta - audio_delta;  // positive = video is ahead
+
+                if (std::abs(drift) > 0.05) {  // 50ms threshold
+                    // Spread correction over next interval to avoid jarring jumps
+                    auto adjustment = std::chrono::microseconds(
+                        static_cast<int>((drift / drift_check_interval) * 1000000));
+                    next_render_time -= adjustment;  // delay if video ahead, advance if behind
+                    LOG_INFO("Player", "AV drift correction: drift=" + std::to_string(drift * 1000.0) +
+                             "ms, per-frame adjustment=" + std::to_string(adjustment.count()) + "us");
+                }
+            }
+            last_check_audio_time = audio_now;
+            last_check_video_pts = video_now;
+        }
+
+        // Log every 30 frames (~1 second) or on significant events
+        if (frame_count % 30 == 1) {
+            auto elapsed = std::chrono::duration<double>(render_now - last_log_time).count();
+            LOG_INFO("Player", "RenderLoop: rendered frame " + std::to_string(frame_count) +
+                     " PTS=" + std::to_string(item.pts) + "s, actual_interval=" +
+                     std::to_string(actual_interval * 1000.0) + "ms");
+            last_log_time = render_now;
+        }
+
+        next_render_time += frame_interval;
+    }
+
+    LOG_INFO("Player", "Video render thread stopped, total frames rendered=" + std::to_string(frame_count));
 }
 
 PlayerState PlayerImpl::GetState() const {

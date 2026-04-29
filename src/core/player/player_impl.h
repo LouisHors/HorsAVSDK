@@ -55,6 +55,7 @@ public:
 
 private:
     void PlaybackLoop();
+    void VideoRenderLoop();
     void DispatchDecodedVideoFrame(const VideoFrame& frame);
     void DispatchDecodedAudioFrame(const AudioFrame& frame);
     void RenderVideoFrame(const AVFrame* frame);
@@ -113,6 +114,11 @@ private:
     std::mutex video_queue_mutex_;
     std::condition_variable video_queue_cv_;
     static constexpr size_t kMaxVideoQueueSize = 10;
+
+    // Video render thread for AV sync
+    std::thread video_render_thread_;
+    std::atomic<bool> video_render_stop_{false};
+    std::atomic<bool> playback_finished_{false};
 
     // Timebase for video stream
     double video_timebase_ = 0.0;

@@ -227,7 +227,7 @@ using namespace avsdk;
 
 #pragma mark - Rendering
 
-- (void)setRenderView:(MTKView *)view {
+- (void)setRenderView:(NSView *)view {
     if (!_cppPlayer) return;
 
     void *nativeWindow = (__bridge void *)view;

@@ -133,10 +133,10 @@ NS_SWIFT_NAME(Player)
 #pragma mark - Rendering
 
 /**
- * Set the Metal view for video rendering
- * @param view MTKView to render video to
+ * Set the view for video rendering
+ * @param view NSView to render video to. SDK will create and manage MTKView internally.
  */
-- (void)setRenderView:(nullable MTKView *)view NS_SWIFT_NAME(setRenderView(_:));
+- (void)setRenderView:(nullable NSView *)view NS_SWIFT_NAME(setRenderView(_:));
 
 /**
  * Set the render mode
