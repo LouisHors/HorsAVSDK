@@ -33,6 +33,10 @@ public:
     virtual Timestamp GetCurrentPosition() const = 0;
     virtual Timestamp GetDuration() const = 0;
 
+    // Audio track selection
+    virtual std::vector<AudioTrackInfo> GetAudioTracks() const = 0;
+    virtual ErrorCode SelectAudioTrack(int trackIndex) = 0;
+
     // Rendering
     virtual ErrorCode SetRenderer(std::shared_ptr<IRenderer> renderer) = 0;
     virtual void SetRenderView(void* native_window) = 0;

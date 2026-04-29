@@ -144,6 +144,28 @@ NS_SWIFT_NAME(Player)
  */
 - (void)setRenderMode:(HorsAVRenderMode)mode NS_SWIFT_NAME(setRenderMode(_:));
 
+#pragma mark - Audio Tracks
+
+/**
+ * Available audio tracks for the currently opened media.
+ * Returns nil if no media is loaded or no audio is present.
+ */
+@property (nonatomic, readonly, nullable, copy) NSArray<HorsAVAudioTrackInfo *> *audioTracks;
+
+/**
+ * Index of the currently selected audio track
+ */
+@property (nonatomic, readonly) NSInteger selectedAudioTrack;
+
+/**
+ * Select an audio track by index
+ * @param trackIndex The track index from audioTracks array
+ * @param error Error output if selection fails
+ * @return YES if successful, NO otherwise
+ */
+- (BOOL)selectAudioTrack:(NSInteger)trackIndex error:(NSError **)error
+    NS_SWIFT_NAME(selectAudioTrack(_:));
+
 #pragma mark - Data Bypass
 
 /**

@@ -2,6 +2,46 @@
 
 // MARK: - HorsAVMediaInfo Implementation
 
+@interface HorsAVAudioTrackInfo ()
+- (instancetype)initWithTrackIndex:(NSInteger)trackIndex
+                          language:(NSString *)language
+                             title:(NSString *)title
+                        sampleRate:(NSInteger)sampleRate
+                          channels:(NSInteger)channels NS_DESIGNATED_INITIALIZER;
+@end
+
+@implementation HorsAVAudioTrackInfo
+
+- (instancetype)initWithTrackIndex:(NSInteger)trackIndex
+                          language:(NSString *)language
+                             title:(NSString *)title
+                        sampleRate:(NSInteger)sampleRate
+                          channels:(NSInteger)channels {
+    self = [super init];
+    if (self) {
+        _trackIndex = trackIndex;
+        _language = [language copy];
+        _title = [title copy];
+        _sampleRate = sampleRate;
+        _channels = channels;
+    }
+    return self;
+}
+
+- (instancetype)init {
+    return nil;
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+    return [[HorsAVAudioTrackInfo allocWithZone:zone] initWithTrackIndex:self.trackIndex
+                                                                language:self.language
+                                                                   title:self.title
+                                                              sampleRate:self.sampleRate
+                                                                channels:self.channels];
+}
+
+@end
+
 @interface HorsAVMediaInfo ()
 - (instancetype)initWithURL:(NSString *)url
                      format:(NSString *)format
@@ -12,7 +52,8 @@
            audioSampleRate:(NSInteger)sampleRate
               audioChannels:(NSInteger)channels
                    hasVideo:(BOOL)hasVideo
-                   hasAudio:(BOOL)hasAudio NS_DESIGNATED_INITIALIZER;
+                   hasAudio:(BOOL)hasAudio
+                 audioTracks:(NSArray<HorsAVAudioTrackInfo *> *)audioTracks NS_DESIGNATED_INITIALIZER;
 @end
 
 @implementation HorsAVMediaInfo
@@ -26,7 +67,8 @@
            audioSampleRate:(NSInteger)sampleRate
               audioChannels:(NSInteger)channels
                    hasVideo:(BOOL)hasVideo
-                   hasAudio:(BOOL)hasAudio {
+                   hasAudio:(BOOL)hasAudio
+                 audioTracks:(NSArray<HorsAVAudioTrackInfo *> *)audioTracks {
     self = [super init];
     if (self) {
         _url = [url copy];
@@ -39,6 +81,7 @@
         _audioChannels = channels;
         _hasVideo = hasVideo;
         _hasAudio = hasAudio;
+        _audioTracks = [audioTracks copy];
     }
     return self;
 }
@@ -57,7 +100,8 @@
                                             audioSampleRate:self.audioSampleRate
                                                audioChannels:self.audioChannels
                                                     hasVideo:self.hasVideo
-                                                    hasAudio:self.hasAudio];
+                                                    hasAudio:self.hasAudio
+                                                 audioTracks:self.audioTracks];
 }
 
 @end

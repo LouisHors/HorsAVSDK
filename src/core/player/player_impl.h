@@ -38,6 +38,9 @@ public:
     Timestamp GetCurrentPosition() const override;
     Timestamp GetDuration() const override;
 
+    std::vector<AudioTrackInfo> GetAudioTracks() const override;
+    ErrorCode SelectAudioTrack(int trackIndex) override;
+
     ErrorCode SetRenderer(std::shared_ptr<IRenderer> renderer) override;
     void SetRenderView(void* native_window) override;
 
@@ -70,7 +73,7 @@ private:
 
     std::unique_ptr<IDemuxer> demuxer_;
     std::unique_ptr<IDecoder> video_decoder_;
-    std::unique_ptr<IDecoder> audio_decoder_;
+    std::vector<std::unique_ptr<IDecoder>> audio_decoders_;
     std::shared_ptr<IRenderer> video_renderer_;
     std::unique_ptr<IAudioRenderer> audio_renderer_;
 
@@ -122,7 +125,9 @@ private:
 
     // Timebase for video stream
     double video_timebase_ = 0.0;
-    double audio_timebase_ = 0.0;
+    std::vector<double> audio_timebases_;
+    int selected_audio_track_ = 0;
+    double first_audio_pts_ = -1.0;  // First audio PTS for sync baseline
 
     // Hardware decoder fallback tracking
     bool hw_decoder_active_ = false;

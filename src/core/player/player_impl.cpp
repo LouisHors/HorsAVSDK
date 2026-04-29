@@ -154,10 +154,13 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
         audio_renderer_->Close();
         audio_renderer_.reset();
     }
-    if (audio_decoder_) {
-        audio_decoder_->Close();
-        audio_decoder_.reset();
+    for (auto& decoder : audio_decoders_) {
+        if (decoder) {
+            decoder->Close();
+        }
     }
+    audio_decoders_.clear();
+    selected_audio_track_ = 0;
     if (video_decoder_) {
         video_decoder_->Close();
         video_decoder_.reset();
@@ -169,6 +172,7 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
     }
     audio_resample_buffer_.clear();
     audio_clock_.Reset();
+    first_audio_pts_ = -1.0;
     if (audio_dump_file_.is_open()) {
         audio_dump_file_.close();
     }
@@ -199,8 +203,8 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
             break;
         case URLType::HTTP:
         case URLType::HTTPS:
-            LOG_INFO("Player", "Detected network URL, using NetworkDemuxer");
-            demuxer_ = CreateNetworkDemuxer();
+            LOG_INFO("Player", "Detected network URL, using FFmpegDemuxer (HTTP/HTTPS supported by libavformat)");
+            demuxer_ = CreateFFmpegDemuxer();
             break;
         case URLType::LocalFile:
         default:
@@ -219,9 +223,12 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
 
     // Get timebases for AV sync
     video_timebase_ = demuxer_->GetVideoTimebase();
-    audio_timebase_ = demuxer_->GetAudioTimebase();
+    audio_timebases_.clear();
+    for (int idx : demuxer_->GetAudioStreamIndices()) {
+        audio_timebases_.push_back(demuxer_->GetAudioTimebase(idx));
+    }
     LOG_INFO("Player", "Timebases - Video: " + std::to_string(video_timebase_) +
-             ", Audio: " + std::to_string(audio_timebase_));
+             ", Audio tracks: " + std::to_string(audio_timebases_.size()));
 
     // Initialize decoders
     if (media_info_.has_video) {
@@ -276,61 +283,70 @@ ErrorCode PlayerImpl::Open(const std::string& url) {
         }
     }
 
-    // Initialize audio decoder and renderer
+    // Initialize audio decoders and renderer
     if (media_info_.has_audio) {
-        audio_decoder_ = CreateFFmpegDecoder();
-        AVCodecParameters* audioCodecpar = demuxer_->GetAudioCodecParameters();
-        if (audioCodecpar) {
-            auto result = audio_decoder_->Initialize(audioCodecpar);
-            if (result != ErrorCode::OK) {
-                LOG_ERROR("Player", "Failed to initialize audio decoder");
-                audio_decoder_.reset();
-            } else {
-                // Initialize audio renderer
-                audio_renderer_ = CreatePlatformAudioRenderer();
-                if (audio_renderer_) {
-                    AudioFormat audioFormat;
-                    audioFormat.sample_rate = media_info_.audio_sample_rate;
-                    audioFormat.channels = media_info_.audio_channels;
-                    audioFormat.bits_per_sample = 16; // Default to 16-bit
-                    result = audio_renderer_->Initialize(audioFormat);
-                    if (result != ErrorCode::OK) {
-                        LOG_ERROR("Player", "Failed to initialize audio renderer");
-                        audio_renderer_.reset();
+        auto audioIndices = demuxer_->GetAudioStreamIndices();
+        audio_decoders_.clear();
+        for (size_t i = 0; i < audioIndices.size(); i++) {
+            auto decoder = CreateFFmpegDecoder();
+            AVCodecParameters* audioCodecpar = demuxer_->GetAudioCodecParameters(audioIndices[i]);
+            if (audioCodecpar) {
+                auto result = decoder->Initialize(audioCodecpar);
+                if (result != ErrorCode::OK) {
+                    LOG_ERROR("Player", "Failed to initialize audio decoder for track " + std::to_string(i));
+                } else {
+                    LOG_INFO("Player", "Audio decoder initialized for track " + std::to_string(i) +
+                             " (stream " + std::to_string(audioIndices[i]) + ")");
+                }
+            }
+            audio_decoders_.push_back(std::move(decoder));
+        }
+
+        if (!audio_decoders_.empty() && audio_decoders_[0]) {
+            // Initialize audio renderer (shared across all tracks)
+            audio_renderer_ = CreatePlatformAudioRenderer();
+            if (audio_renderer_) {
+                AudioFormat audioFormat;
+                audioFormat.sample_rate = media_info_.audio_sample_rate;
+                audioFormat.channels = media_info_.audio_channels;
+                audioFormat.bits_per_sample = 16; // Default to 16-bit
+                auto result = audio_renderer_->Initialize(audioFormat);
+                if (result != ErrorCode::OK) {
+                    LOG_ERROR("Player", "Failed to initialize audio renderer");
+                    audio_renderer_.reset();
+                } else {
+                    LOG_INFO("Player", "Audio renderer initialized: " +
+                             std::to_string(audioFormat.sample_rate) + "Hz, " +
+                             std::to_string(audioFormat.channels) + " channels");
+
+                    // Initialize audio resampler (convert any format to S16)
+                    AVChannelLayout out_ch_layout, in_ch_layout;
+                    av_channel_layout_default(&out_ch_layout, audioFormat.channels);
+                    av_channel_layout_default(&in_ch_layout, audioFormat.channels);
+
+                    int ret = swr_alloc_set_opts2(&swr_context_,
+                        &out_ch_layout,                       // Output layout
+                        AV_SAMPLE_FMT_S16,                    // Output format
+                        audioFormat.sample_rate,              // Output rate
+                        &in_ch_layout,                        // Input layout
+                        AV_SAMPLE_FMT_FLTP,                   // Input format (AAC default)
+                        audioFormat.sample_rate,              // Input rate
+                        0, nullptr);
+
+                    av_channel_layout_uninit(&out_ch_layout);
+                    av_channel_layout_uninit(&in_ch_layout);
+
+                    if (ret < 0) {
+                        LOG_ERROR("Player", "Failed to create audio resampler");
+                        swr_context_ = nullptr;
                     } else {
-                        LOG_INFO("Player", "Audio initialized: " +
-                                 std::to_string(audioFormat.sample_rate) + "Hz, " +
-                                 std::to_string(audioFormat.channels) + " channels");
-
-                        // Initialize audio resampler (convert any format to S16)
-                        AVChannelLayout out_ch_layout, in_ch_layout;
-                        av_channel_layout_default(&out_ch_layout, audioFormat.channels);
-                        av_channel_layout_default(&in_ch_layout, audioFormat.channels);
-
-                        int ret = swr_alloc_set_opts2(&swr_context_,
-                            &out_ch_layout,                       // Output layout
-                            AV_SAMPLE_FMT_S16,                    // Output format
-                            audioFormat.sample_rate,              // Output rate
-                            &in_ch_layout,                        // Input layout
-                            AV_SAMPLE_FMT_FLTP,                   // Input format (AAC default)
-                            audioFormat.sample_rate,              // Input rate
-                            0, nullptr);
-
-                        av_channel_layout_uninit(&out_ch_layout);
-                        av_channel_layout_uninit(&in_ch_layout);
-
+                        ret = swr_init(swr_context_);
                         if (ret < 0) {
-                            LOG_ERROR("Player", "Failed to create audio resampler");
+                            LOG_ERROR("Player", "Failed to initialize audio resampler");
+                            swr_free(&swr_context_);
                             swr_context_ = nullptr;
                         } else {
-                            ret = swr_init(swr_context_);
-                            if (ret < 0) {
-                                LOG_ERROR("Player", "Failed to initialize audio resampler");
-                                swr_free(&swr_context_);
-                                swr_context_ = nullptr;
-                            } else {
-                                LOG_INFO("Player", "Audio resampler initialized");
-                            }
+                            LOG_INFO("Player", "Audio resampler initialized");
                         }
                     }
                 }
@@ -358,7 +374,11 @@ void PlayerImpl::Close() {
         demuxer_.reset();
     }
     video_decoder_.reset();
-    audio_decoder_.reset();
+    for (auto& decoder : audio_decoders_) {
+        decoder.reset();
+    }
+    audio_decoders_.clear();
+    selected_audio_track_ = 0;
     hw_decoder_active_ = false;
     if (swr_context_) {
         swr_free(&swr_context_);
@@ -504,9 +524,16 @@ void PlayerImpl::RenderVideoFrame(const AVFrame* frame) {
 
 void PlayerImpl::PlaybackLoop() {
     int videoStreamIndex = demuxer_->GetVideoStreamIndex();
-    int audioStreamIndex = demuxer_->GetAudioStreamIndex();
+    auto audioIndices = demuxer_->GetAudioStreamIndices();
+    int activeAudioStreamIndex = (selected_audio_track_ < static_cast<int>(audioIndices.size()))
+        ? audioIndices[selected_audio_track_] : -1;
+    IDecoder* activeAudioDecoder = (selected_audio_track_ < static_cast<int>(audio_decoders_.size()))
+        ? audio_decoders_[selected_audio_track_].get() : nullptr;
+    double activeAudioTimebase = (selected_audio_track_ < static_cast<int>(audio_timebases_.size()))
+        ? audio_timebases_[selected_audio_track_] : 0.0;
     LOG_INFO("Player", "Playback loop started, video stream index: " + std::to_string(videoStreamIndex) +
-             ", audio stream index: " + std::to_string(audioStreamIndex));
+             ", active audio stream index: " + std::to_string(activeAudioStreamIndex) +
+             " (track " + std::to_string(selected_audio_track_) + " / " + std::to_string(audioIndices.size()) + ")");
 
     // Pre-buffer audio before starting playback
     bool audio_prebuffered = false;
@@ -531,7 +558,7 @@ void PlayerImpl::PlaybackLoop() {
         // Non-blocking audio flow control: if buffer is very full, give AudioUnit
         // a chance to drain by yielding briefly. This avoids losing audio data
         // without blocking video decoding for long periods.
-        if (audio_renderer_ && audio_prebuffered && audioStreamIndex >= 0) {
+        if (audio_renderer_ && audio_prebuffered && activeAudioStreamIndex >= 0) {
             int buffered_ms = audio_renderer_->GetBufferedDuration();
             if (buffered_ms > kMaxBufferMs) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -569,11 +596,11 @@ void PlayerImpl::PlaybackLoop() {
                 LOG_INFO("Player", "Drained " + std::to_string(drained) + " video frames from decoder");
             }
 
-            if (audio_decoder_ && audioStreamIndex >= 0) {
+            if (activeAudioDecoder && activeAudioStreamIndex >= 0) {
                 LOG_INFO("Player", "Draining audio decoder...");
                 int drained = 0;
                 while (!should_stop_) {
-                    auto frame = audio_decoder_->Decode(nullptr);
+                    auto frame = activeAudioDecoder->Decode(nullptr);
                     if (!frame) break;
                     drained++;
                     // Process drained audio frame same as normal decode path
@@ -644,7 +671,7 @@ void PlayerImpl::PlaybackLoop() {
             }
 
             // End of stream reached - wait for audio buffer to drain
-            if (audio_renderer_ && audioStreamIndex >= 0) {
+            if (audio_renderer_ && activeAudioStreamIndex >= 0) {
                 LOG_INFO("Player", "End of stream, waiting for audio buffer to drain...");
                 int wait_count = 0;
                 while (wait_count < 2000 && !should_stop_) {  // Max wait 20 seconds for long audio
@@ -731,12 +758,16 @@ void PlayerImpl::PlaybackLoop() {
             }
         }
         // Process audio packets
-        else if (packet->stream_index == audioStreamIndex && audioStreamIndex >= 0) {
-            if (audio_decoder_ && audio_renderer_) {
-                auto frame = audio_decoder_->Decode(packet);
+        else if (packet->stream_index == activeAudioStreamIndex && activeAudioStreamIndex >= 0) {
+            if (activeAudioDecoder && audio_renderer_) {
+                auto frame = activeAudioDecoder->Decode(packet);
                 if (frame) {
                     // Calculate audio PTS
-                    double audio_pts = frame->pts * audio_timebase_;
+                    double audio_pts = frame->pts * activeAudioTimebase;
+                    if (first_audio_pts_ < 0) {
+                        first_audio_pts_ = audio_pts;
+                        LOG_INFO("Player", "First audio PTS captured: " + std::to_string(first_audio_pts_) + "s");
+                    }
 
                     // Check if resampling is needed
                     AVSampleFormat srcFormat = static_cast<AVSampleFormat>(frame->format);
@@ -847,10 +878,11 @@ void PlayerImpl::PlaybackLoop() {
                 continue;
             }
 
-            // Initialize audio clock with first audio PTS
-            audio_clock_.UpdateByPTS(0.0);  // Start from 0
-            audio_clock_.Start();
+            // Initialize audio clock with first audio PTS (compensates for streams not starting at 0)
+            double clock_base = (first_audio_pts_ >= 0) ? first_audio_pts_ : 0.0;
+            audio_clock_.UpdateByPTS(clock_base);
             audio_renderer_->Play();
+            audio_clock_.Start();
             audio_prebuffered = true;
             LOG_INFO("Player", "Audio playback started after pre-buffering " +
                      std::to_string(audio_packets_decoded) + " packets, samples: " + std::to_string(total_audio_samples) +
@@ -892,6 +924,12 @@ void PlayerImpl::VideoRenderLoop() {
     int drift_check_interval = 30;  // Check every ~1 second (30 frames)
 
     while (!video_render_stop_ && !should_stop_) {
+        // Wait for audio clock to start so video doesn't race ahead of audio
+        if (!audio_clock_.IsRunning()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            continue;
+        }
+
         // ---- 1. Timer-driven: sleep until next frame slot ----
         auto now = std::chrono::steady_clock::now();
         if (now < next_render_time) {
@@ -933,6 +971,16 @@ void PlayerImpl::VideoRenderLoop() {
         frame_count++;
         auto render_now = std::chrono::steady_clock::now();
         double actual_interval = std::chrono::duration<double>(render_now - (next_render_time - frame_interval)).count();
+
+        // Log AV sync offset on every frame for debugging
+        double audio_now = audio_clock_.GetTime();
+        double av_offset_ms = (item.pts - audio_now) * 1000.0;  // positive = video ahead
+        if (frame_count <= 5 || frame_count % 30 == 0) {
+            LOG_INFO("Player", "RenderLoop: frame=" + std::to_string(frame_count) +
+                     " video_pts=" + std::to_string(item.pts) +
+                     "s audio_clock=" + std::to_string(audio_now) +
+                     "s av_offset=" + std::to_string(av_offset_ms) + "ms");
+        }
         RenderVideoFrame(item.frame.get());
 
         // ---- 4. Loose AV drift correction ----
@@ -990,6 +1038,29 @@ Timestamp PlayerImpl::GetCurrentPosition() const {
 
 Timestamp PlayerImpl::GetDuration() const {
     return media_info_.duration_ms;
+}
+
+std::vector<AudioTrackInfo> PlayerImpl::GetAudioTracks() const {
+    return media_info_.audio_tracks;
+}
+
+ErrorCode PlayerImpl::SelectAudioTrack(int trackIndex) {
+    auto audioIndices = demuxer_->GetAudioStreamIndices();
+    if (trackIndex < 0 || trackIndex >= static_cast<int>(audioIndices.size())) {
+        LOG_ERROR("Player", "Invalid audio track index: " + std::to_string(trackIndex) +
+                  ", total tracks: " + std::to_string(audioIndices.size()));
+        return ErrorCode::InvalidParameter;
+    }
+    if (trackIndex == selected_audio_track_) {
+        return ErrorCode::OK;
+    }
+    LOG_INFO("Player", "Switching audio track from " + std::to_string(selected_audio_track_) +
+             " to " + std::to_string(trackIndex));
+    selected_audio_track_ = trackIndex;
+    if (selected_audio_track_ < static_cast<int>(audio_decoders_.size()) && audio_decoders_[selected_audio_track_]) {
+        audio_decoders_[selected_audio_track_]->Flush();
+    }
+    return ErrorCode::OK;
 }
 
 std::unique_ptr<IPlayer> CreatePlayer() {

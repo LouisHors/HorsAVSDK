@@ -15,6 +15,29 @@
 
 using namespace avsdk;
 
+// Forward declarations for private initializers defined in HorsAVTypes.mm
+@interface HorsAVAudioTrackInfo ()
+- (instancetype)initWithTrackIndex:(NSInteger)trackIndex
+                          language:(NSString *)language
+                             title:(NSString *)title
+                        sampleRate:(NSInteger)sampleRate
+                          channels:(NSInteger)channels;
+@end
+
+@interface HorsAVMediaInfo ()
+- (instancetype)initWithURL:(NSString *)url
+                     format:(NSString *)format
+                   duration:(NSTimeInterval)duration
+                 videoWidth:(NSInteger)width
+                videoHeight:(NSInteger)height
+            videoFrameRate:(double)frameRate
+           audioSampleRate:(NSInteger)sampleRate
+              audioChannels:(NSInteger)channels
+                   hasVideo:(BOOL)hasVideo
+                   hasAudio:(BOOL)hasAudio
+                 audioTracks:(NSArray<HorsAVAudioTrackInfo *> *)audioTracks;
+@end
+
 // MARK: - Private Interface
 
 @interface HorsAVPlayer () {
@@ -255,13 +278,75 @@ using namespace avsdk;
     _cppPlayer->EnableAudioFrameCallback(configuration.enableAudioFrames);
 }
 
+#pragma mark - Audio Tracks
+
+- (NSArray<HorsAVAudioTrackInfo *> *)audioTracks {
+    if (!_cppPlayer) return nil;
+    auto tracks = _cppPlayer->GetAudioTracks();
+    NSMutableArray *result = [NSMutableArray arrayWithCapacity:tracks.size()];
+    for (size_t i = 0; i < tracks.size(); i++) {
+        const auto &track = tracks[i];
+        HorsAVAudioTrackInfo *info = [[HorsAVAudioTrackInfo alloc] initWithTrackIndex:track.stream_index
+                                                                             language:@(track.language.c_str())
+                                                                                title:@(track.title.c_str())
+                                                                           sampleRate:track.sample_rate
+                                                                             channels:track.channels];
+        [result addObject:info];
+    }
+    return result;
+}
+
+- (NSInteger)selectedAudioTrack {
+    if (!_cppPlayer) return 0;
+    // C++ side doesn't expose selected index directly; we track it or return 0
+    return 0;
+}
+
+- (BOOL)selectAudioTrack:(NSInteger)trackIndex error:(NSError **)error {
+    if (!_cppPlayer) {
+        if (error) {
+            *error = [NSError errorWithDomain:HorsAVErrorDomain
+                                         code:HorsAVErrorCodeNotInitialized
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Player not initialized"}];
+        }
+        return NO;
+    }
+    ErrorCode result = _cppPlayer->SelectAudioTrack(static_cast<int>(trackIndex));
+    if (result != ErrorCode::OK) {
+        if (error) {
+            NSString *message = HorsAVGetErrorDescription(static_cast<HorsAVErrorCode>(result)) ?: @"Failed to select audio track";
+            *error = [NSError errorWithDomain:HorsAVErrorDomain
+                                         code:static_cast<HorsAVErrorCode>(result)
+                                     userInfo:@{NSLocalizedDescriptionKey: message}];
+        }
+        return NO;
+    }
+    return YES;
+}
+
 #pragma mark - Private Methods
 
 - (HorsAVMediaInfo *)convertMediaInfo:(const MediaInfo &)info url:(NSURL *)url {
-    // Create and return a HorsAVMediaInfo object
-    // This would typically use a factory method or internal constructor
-    // For now, return nil - actual implementation would create the object
-    return nil;
+    NSMutableArray *audioTracks = [NSMutableArray arrayWithCapacity:info.audio_tracks.size()];
+    for (const auto &track : info.audio_tracks) {
+        HorsAVAudioTrackInfo *trackInfo = [[HorsAVAudioTrackInfo alloc] initWithTrackIndex:track.stream_index
+                                                                                  language:@(track.language.c_str())
+                                                                                     title:@(track.title.c_str())
+                                                                                sampleRate:track.sample_rate
+                                                                                  channels:track.channels];
+        [audioTracks addObject:trackInfo];
+    }
+    return [[HorsAVMediaInfo alloc] initWithURL:url.absoluteString
+                                         format:@(info.format.c_str())
+                                       duration:info.duration_ms / 1000.0
+                                     videoWidth:info.video_width
+                                    videoHeight:info.video_height
+                                 videoFrameRate:info.video_framerate
+                                audioSampleRate:info.audio_sample_rate
+                                   audioChannels:info.audio_channels
+                                        hasVideo:info.has_video
+                                        hasAudio:info.has_audio
+                                      audioTracks:audioTracks];
 }
 
 - (void)notifyStateChangedFrom:(HorsAVPlayerState)oldState to:(HorsAVPlayerState)newState {
@@ -274,16 +359,3 @@ using namespace avsdk;
 
 @end
 
-// MARK: - HorsAVMediaInfo Implementation
-
-@implementation HorsAVMediaInfo
-
-- (instancetype)init {
-    return nil; // Use factory methods
-}
-
-- (id)copyWithZone:(NSZone *)zone {
-    return self; // Immutable, return self
-}
-
-@end

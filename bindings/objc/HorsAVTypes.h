@@ -62,6 +62,44 @@ typedef NS_ENUM(NSInteger, HorsAVDecoderMode) {
     HorsAVDecoderModeHardwareFirst = 3
 };
 
+// MARK: - Audio Track Info
+
+/**
+ * Audio track information
+ */
+NS_SWIFT_NAME(AudioTrackInfo)
+@interface HorsAVAudioTrackInfo : NSObject <NSCopying>
+
+/**
+ * Track index for selection
+ */
+@property (nonatomic, readonly) NSInteger trackIndex;
+
+/**
+ * Language code (e.g., "eng", "chi", "jpn")
+ */
+@property (nonatomic, readonly, copy) NSString *language;
+
+/**
+ * Track title or description
+ */
+@property (nonatomic, readonly, copy) NSString *title;
+
+/**
+ * Sample rate in Hz
+ */
+@property (nonatomic, readonly) NSInteger sampleRate;
+
+/**
+ * Number of channels
+ */
+@property (nonatomic, readonly) NSInteger channels;
+
+- (instancetype)init NS_UNAVAILABLE;
++ (instancetype)new NS_UNAVAILABLE;
+
+@end
+
 // MARK: - Media Info
 
 /**
@@ -120,6 +158,11 @@ NS_SWIFT_NAME(MediaInfo)
  * Whether media has audio stream
  */
 @property (nonatomic, readonly) BOOL hasAudio;
+
+/**
+ * Available audio tracks. Empty if no audio.
+ */
+@property (nonatomic, readonly, copy) NSArray<HorsAVAudioTrackInfo *> *audioTracks;
 
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;

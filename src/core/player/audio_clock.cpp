@@ -37,6 +37,13 @@ double AudioClock::GetTime() const {
     if (!is_running_.load()) {
         return base_pts_.load();
     }
+    // Use accumulated sample count for accurate audio clock (audio is master)
+    int64_t samples = total_samples_played_.load();
+    int rate = sample_rate_.load();
+    if (rate > 0 && samples > 0) {
+        return base_pts_.load() + static_cast<double>(samples) / rate;
+    }
+    // Fallback to wall-clock before any samples have been processed
     auto now = std::chrono::steady_clock::now();
     double elapsed = std::chrono::duration<double>(now - start_time_).count();
     return base_pts_.load() + elapsed;

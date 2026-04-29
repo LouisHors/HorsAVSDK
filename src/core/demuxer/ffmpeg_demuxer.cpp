@@ -57,6 +57,7 @@ ErrorCode FFmpegDemuxer::Open(const std::string& url) {
     }
 
     // Find video and audio streams
+    audio_stream_indices_.clear();
     for (unsigned int i = 0; i < format_ctx_->nb_streams; i++) {
         AVStream* stream = format_ctx_->streams[i];
         if (stream->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
@@ -68,12 +69,34 @@ ErrorCode FFmpegDemuxer::Open(const std::string& url) {
             LOG_INFO("Demuxer", "Video stream index: " + std::to_string(i) +
                      " codec_id: " + std::to_string(stream->codecpar->codec_id));
         } else if (stream->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
-            audio_stream_index_ = i;
+            audio_stream_indices_.push_back(i);
             media_info_.has_audio = true;
-            media_info_.audio_sample_rate = stream->codecpar->sample_rate;
-            media_info_.audio_channels = stream->codecpar->ch_layout.nb_channels;
-            LOG_INFO("Demuxer", "Audio stream index: " + std::to_string(i));
+            LOG_INFO("Demuxer", "Audio stream index: " + std::to_string(i) +
+                     " codec_id: " + std::to_string(stream->codecpar->codec_id));
+
+            AudioTrackInfo track;
+            track.stream_index = i;
+            track.sample_rate = stream->codecpar->sample_rate;
+            track.channels = stream->codecpar->ch_layout.nb_channels;
+            AVDictionaryEntry* lang = av_dict_get(stream->metadata, "language", nullptr, 0);
+            if (lang && lang->value) {
+                track.language = lang->value;
+            }
+            AVDictionaryEntry* title = av_dict_get(stream->metadata, "title", nullptr, 0);
+            if (!title) {
+                title = av_dict_get(stream->metadata, "handler_name", nullptr, 0);
+            }
+            if (title && title->value) {
+                track.title = title->value;
+            }
+            media_info_.audio_tracks.push_back(track);
         }
+    }
+
+    if (!audio_stream_indices_.empty()) {
+        media_info_.audio_sample_rate = media_info_.audio_tracks[0].sample_rate;
+        media_info_.audio_channels = media_info_.audio_tracks[0].channels;
+        LOG_INFO("Demuxer", "Total audio tracks: " + std::to_string(audio_stream_indices_.size()));
     }
 
     media_info_.url = url;
@@ -90,6 +113,7 @@ void FFmpegDemuxer::Close() {
         avformat_close_input(&format_ctx_);
         format_ctx_ = nullptr;
     }
+    audio_stream_indices_.clear();
 }
 
 AVPacketPtr FFmpegDemuxer::ReadPacket() {
@@ -129,11 +153,11 @@ AVCodecParameters* FFmpegDemuxer::GetVideoCodecParameters() const {
     return format_ctx_->streams[video_stream_index_]->codecpar;
 }
 
-AVCodecParameters* FFmpegDemuxer::GetAudioCodecParameters() const {
-    if (!format_ctx_ || audio_stream_index_ < 0) {
-        return nullptr;
-    }
-    return format_ctx_->streams[audio_stream_index_]->codecpar;
+AVCodecParameters* FFmpegDemuxer::GetAudioCodecParameters(int streamIndex) const {
+    if (!format_ctx_) return nullptr;
+    int idx = streamIndex >= 0 ? streamIndex : (audio_stream_indices_.empty() ? -1 : audio_stream_indices_[0]);
+    if (idx < 0) return nullptr;
+    return format_ctx_->streams[idx]->codecpar;
 }
 
 double FFmpegDemuxer::GetVideoTimebase() const {
@@ -144,11 +168,11 @@ double FFmpegDemuxer::GetVideoTimebase() const {
     return av_q2d(stream->time_base);
 }
 
-double FFmpegDemuxer::GetAudioTimebase() const {
-    if (!format_ctx_ || audio_stream_index_ < 0) {
-        return 0.0;
-    }
-    AVStream* stream = format_ctx_->streams[audio_stream_index_];
+double FFmpegDemuxer::GetAudioTimebase(int streamIndex) const {
+    if (!format_ctx_) return 0.0;
+    int idx = streamIndex >= 0 ? streamIndex : (audio_stream_indices_.empty() ? -1 : audio_stream_indices_[0]);
+    if (idx < 0) return 0.0;
+    AVStream* stream = format_ctx_->streams[idx];
     return av_q2d(stream->time_base);
 }
 

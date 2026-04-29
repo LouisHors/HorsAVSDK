@@ -23,11 +23,12 @@ public:
     MediaInfo GetMediaInfo() const override;
     int GetVideoStreamIndex() const override { return video_stream_index_; }
     int GetAudioStreamIndex() const override { return audio_stream_index_; }
+    std::vector<int> GetAudioStreamIndices() const override { return audio_stream_index_ >= 0 ? std::vector<int>{audio_stream_index_} : std::vector<int>{}; }
     AVCodecParameters* GetVideoCodecParameters() const override;
-    AVCodecParameters* GetAudioCodecParameters() const override;
+    AVCodecParameters* GetAudioCodecParameters(int streamIndex = -1) const override;
 
     double GetVideoTimebase() const override;
-    double GetAudioTimebase() const override;
+    double GetAudioTimebase(int streamIndex = -1) const override;
 
     // Network specific
     void SetBufferSize(size_t size);
