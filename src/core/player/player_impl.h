@@ -40,6 +40,8 @@ public:
 
     std::vector<AudioTrackInfo> GetAudioTracks() const override;
     ErrorCode SelectAudioTrack(int trackIndex) override;
+    void SetMixAllAudioTracks(bool enable) override;
+    bool GetMixAllAudioTracks() const override;
 
     ErrorCode SetRenderer(std::shared_ptr<IRenderer> renderer) override;
     void SetRenderView(void* native_window) override;
@@ -128,6 +130,12 @@ private:
     std::vector<double> audio_timebases_;
     int selected_audio_track_ = 0;
     double first_audio_pts_ = -1.0;  // First audio PTS for sync baseline
+
+    // Audio mixing
+    bool mix_all_audio_tracks_ = false;
+    // Each track's decoded PCM buffer (S16 interleaved samples)
+    std::vector<std::vector<int16_t>> audio_track_mix_buffers_;
+    void MixAndWriteAudioBuffers();
 
     // Hardware decoder fallback tracking
     bool hw_decoder_active_ = false;

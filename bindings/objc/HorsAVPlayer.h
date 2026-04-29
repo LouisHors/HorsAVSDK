@@ -166,6 +166,12 @@ NS_SWIFT_NAME(Player)
 - (BOOL)selectAudioTrack:(NSInteger)trackIndex error:(NSError **)error
     NS_SWIFT_NAME(selectAudioTrack(_:));
 
+/**
+ * When YES, all audio tracks are mixed and played simultaneously.
+ * When NO (default), only the selected track is played.
+ */
+@property (nonatomic, readwrite, getter=isMixAllAudioTracks) BOOL mixAllAudioTracks;
+
 #pragma mark - Data Bypass
 
 /**

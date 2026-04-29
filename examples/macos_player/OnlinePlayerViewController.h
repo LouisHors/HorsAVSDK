@@ -14,6 +14,7 @@
 @property (strong) NSButton *backButton;
 @property (strong) NSTextField *statusLabel;
 @property (strong) NSPopUpButton *audioTrackPopup;
+@property (strong) NSButton *mixTracksCheckbox;
 @property (strong) NSSlider *progressSlider;
 @property (strong) NSTextField *timeLabel;
 

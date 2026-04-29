@@ -324,6 +324,16 @@ using namespace avsdk;
     return YES;
 }
 
+- (BOOL)isMixAllAudioTracks {
+    if (!_cppPlayer) return NO;
+    return _cppPlayer->GetMixAllAudioTracks();
+}
+
+- (void)setMixAllAudioTracks:(BOOL)mixAllAudioTracks {
+    if (!_cppPlayer) return;
+    _cppPlayer->SetMixAllAudioTracks(mixAllAudioTracks);
+}
+
 #pragma mark - Private Methods
 
 - (HorsAVMediaInfo *)convertMediaInfo:(const MediaInfo &)info url:(NSURL *)url {

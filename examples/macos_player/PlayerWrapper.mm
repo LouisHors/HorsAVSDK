@@ -146,6 +146,14 @@
     return success;
 }
 
+- (BOOL)isMixAllAudioTracks {
+    return self.player.mixAllAudioTracks;
+}
+
+- (void)setMixAllAudioTracks:(BOOL)mixAllAudioTracks {
+    self.player.mixAllAudioTracks = mixAllAudioTracks;
+}
+
 #pragma mark - Rendering
 
 - (void)setRenderView:(NSView *)view {

@@ -95,6 +95,16 @@
     self.audioTrackPopup.enabled = NO;
     [toolbarView addSubview:self.audioTrackPopup];
 
+    // Mix all tracks checkbox
+    self.mixTracksCheckbox = [[NSButton alloc] init];
+    self.mixTracksCheckbox.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.mixTracksCheckbox setButtonType:NSButtonTypeSwitch];
+    [self.mixTracksCheckbox setTitle:@"Mix All"];
+    [self.mixTracksCheckbox setTarget:self];
+    [self.mixTracksCheckbox setAction:@selector(mixTracksChanged:)];
+    self.mixTracksCheckbox.enabled = NO;
+    [toolbarView addSubview:self.mixTracksCheckbox];
+
     // Status label
     self.statusLabel = [[NSTextField alloc] init];
     self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -128,11 +138,15 @@
         [self.audioTrackPopup.centerYAnchor constraintEqualToAnchor:toolbarView.centerYAnchor],
         [self.audioTrackPopup.widthAnchor constraintEqualToConstant:140],
 
+        [self.mixTracksCheckbox.leadingAnchor constraintEqualToAnchor:self.audioTrackPopup.trailingAnchor constant:8],
+        [self.mixTracksCheckbox.centerYAnchor constraintEqualToAnchor:toolbarView.centerYAnchor],
+        [self.mixTracksCheckbox.widthAnchor constraintEqualToConstant:90],
+
         [self.statusLabel.trailingAnchor constraintEqualToAnchor:toolbarView.trailingAnchor constant:-12],
         [self.statusLabel.centerYAnchor constraintEqualToAnchor:toolbarView.centerYAnchor],
         [self.statusLabel.widthAnchor constraintEqualToConstant:100],
 
-        [self.urlTextField.leadingAnchor constraintEqualToAnchor:self.audioTrackPopup.trailingAnchor constant:12],
+        [self.urlTextField.leadingAnchor constraintEqualToAnchor:self.mixTracksCheckbox.trailingAnchor constant:12],
         [self.urlTextField.trailingAnchor constraintEqualToAnchor:self.statusLabel.leadingAnchor constant:-12],
         [self.urlTextField.centerYAnchor constraintEqualToAnchor:toolbarView.centerYAnchor],
         [self.urlTextField.heightAnchor constraintEqualToConstant:28]
@@ -298,6 +312,20 @@
     [self.statusLabel setStringValue:[NSString stringWithFormat:@"Track: %@", track.title]];
 }
 
+- (void)mixTracksChanged:(id)sender {
+    BOOL mix = self.mixTracksCheckbox.state == NSControlStateValueOn;
+    self.player.mixAllAudioTracks = mix;
+    if (mix) {
+        [self.statusLabel setStringValue:@"Mixing all tracks"];
+    } else {
+        NSInteger selectedIndex = self.audioTrackPopup.indexOfSelectedItem;
+        NSArray<HorsAVAudioTrackInfo *> *tracks = self.player.audioTracks;
+        if (selectedIndex >= 0 && selectedIndex < tracks.count) {
+            [self.statusLabel setStringValue:[NSString stringWithFormat:@"Track: %@", tracks[selectedIndex].title]];
+        }
+    }
+}
+
 #pragma mark - Helpers
 
 - (NSString *)formatTime:(double)seconds {
@@ -375,9 +403,12 @@
                 [self.audioTrackPopup addItemWithTitle:label];
             }
             self.audioTrackPopup.enabled = YES;
+            self.mixTracksCheckbox.enabled = info.audioTracks.count > 1;
+            self.mixTracksCheckbox.state = wrapper.isMixAllAudioTracks ? NSControlStateValueOn : NSControlStateValueOff;
         } else {
             [self.audioTrackPopup addItemWithTitle:@"No Audio"];
             self.audioTrackPopup.enabled = NO;
+            self.mixTracksCheckbox.enabled = NO;
         }
     });
 }

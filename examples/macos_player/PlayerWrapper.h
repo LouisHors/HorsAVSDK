@@ -62,6 +62,7 @@ typedef NS_ENUM(NSInteger, DecoderMode) {
 @property (nonatomic, readonly, nullable, copy) NSArray<HorsAVAudioTrackInfo *> *audioTracks;
 @property (nonatomic, readonly) NSInteger selectedAudioTrack;
 - (BOOL)selectAudioTrack:(NSInteger)trackIndex;
+@property (nonatomic, readwrite) BOOL mixAllAudioTracks;
 
 // Rendering
 - (void)setRenderView:(NSView *)view;
